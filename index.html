@@ -66,6 +66,9 @@ nav button{font-size:11px;padding:6px 2px}
 #setupBanner{display:flex;align-items:center;justify-content:space-between;gap:8px}#setupBanner[hidden]{display:none}
 table.sets{margin:8px 0}table.sets td,table.sets th{padding:4px 3px;text-align:center}table.sets input{min-height:38px;padding:6px;text-align:center}
 details summary{cursor:pointer;margin-top:8px}
+label.btnlike{display:flex;align-items:center;justify-content:center;margin:0;border-radius:12px;min-height:46px;padding:12px 14px;background:var(--card2);color:var(--txt);font-size:16px;cursor:pointer}
+.aiitem{background:var(--card2);border-radius:12px;padding:10px;margin-top:8px}.aiitem.off{opacity:.5}.aiitem input:not([type=checkbox]){min-height:38px;padding:6px 10px;background:var(--card)}
+.conf-high{color:var(--good)}.conf-low{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -101,6 +104,7 @@ details summary{cursor:pointer;margin-top:8px}
       <button id="btnAddFood">✎ Manual entry</button><button id="btnMyFoods">★ My foods</button>
       <button id="btnOnline">🌐 Online search</button><button id="btnScan">▦ Barcode</button>
     </div>
+    <button id="btnAI" class="pri" style="width:100%;margin-top:8px" hidden>✨ Ask AI (describe or snap a photo)</button>
     <div class="row" style="margin-top:8px"><select id="copyMeal"><option value="">Copy yesterday's…</option><option>All</option><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Drink</option></select></div>
     <div class="chips" id="quickChips"></div>
   </div>
@@ -254,6 +258,23 @@ details summary{cursor:pointer;margin-top:8px}
   <p class="mut">Water 3 L and fibre 30 g by default. You can fine-tune everything later under More → Targets.</p>
   <div class="row" style="margin-top:12px"><button type="button" id="suSignIn" hidden>Sign in instead</button><button type="button" id="suLater">Later</button><button class="pri" type="submit">Save</button></div>
 </form></dialog>
+
+<!-- Ask AI -->
+<dialog id="dlgAI"><div>
+  <div class="row"><h3 style="margin:0">✨ Ask AI</h3><button class="sm" id="aiClose" style="flex:0">Close</button></div>
+  <div id="aiSignedOut"><p>Sign in to use AI search.</p><button class="pri" id="aiSignIn" style="width:100%">Go to sign in</button></div>
+  <div id="aiBody">
+    <label>Describe what you ate</label>
+    <textarea id="aiQ" maxlength="500" style="min-height:80px;font:inherit" placeholder="e.g. medium bowl of beef pho from a restaurant, or 300 g cooked flank steak and a cup of rice"></textarea>
+    <div class="row" style="margin-top:8px"><label class="btnlike" for="aiPhoto">📷 Snap / upload photo</label><input type="file" id="aiPhoto" accept="image/*" capture="environment" hidden>
+      <button class="pri" id="aiGo">Ask AI</button></div>
+    <div id="aiThumbW" hidden style="position:relative;margin-top:8px"><img id="aiThumb" alt="Food photo" style="max-width:100%;max-height:200px;border-radius:12px;display:block"><button class="sm" id="aiNoPhoto" style="position:absolute;top:6px;left:6px">✕ Remove photo</button></div>
+    <p class="mut" id="aiStatus"></p>
+    <div id="aiResults"></div>
+    <div id="aiAddW" hidden><p class="mut" id="aiTot"></p><div class="row"><select id="aiMeal" class="mealSel"></select><button class="pri" id="aiAdd">Add selected</button></div>
+      <p class="mut">AI estimates can be off. Check the amounts before adding. Photos are sent for analysis only and aren't stored.</p></div>
+  </div>
+</div></dialog>
 
 <!-- Exercise entry -->
 <dialog id="dlgEx"><div>
@@ -1307,6 +1328,69 @@ function bindEx(){
   $('cxDel').onclick=function(){if(!cxEdit||!confirm('Delete "'+cxEdit.name+'"? Logged entries keep their calories.'))return;S.myEx=S.myEx.filter(function(x){return x!==cxEdit;});save();hideDlg('dlgCx');render();};
 }
 
+// ======================= ASK AI (text or photo → itemised estimates) =======================
+var aiItems=[],aiImg=null,aiBusy=false;
+function aiReady(){return cloudOn()&&sb&&cUser;}
+function openAI(){
+  var ok=aiReady();$('aiSignedOut').hidden=ok;$('aiBody').hidden=!ok;
+  if(ok){$('aiMeal').value=guessMeal();if($('q').value.trim()&&!$('aiQ').value)$('aiQ').value=$('q').value.trim();}
+  showDlg('dlgAI');
+}
+function downscale(file,max,cb){ // -> base64 JPEG (no data: prefix), longest side <= max px
+  var url=URL.createObjectURL(file),img=new Image();
+  img.onload=function(){var s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),w=Math.round(img.naturalWidth*s),h=Math.round(img.naturalHeight*s);
+    var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+    var q=0.82,d=c.toDataURL('image/jpeg',q);while(d.length>1300000&&q>0.4){q-=0.12;d=c.toDataURL('image/jpeg',q);}
+    cb(null,d.split(',')[1],d);};
+  img.onerror=function(){URL.revokeObjectURL(url);cb(new Error('Could not read that photo. Try a JPEG or PNG.'));};
+  img.src=url;
+}
+function aiShowImg(){$('aiThumbW').hidden=!aiImg;if(aiImg)$('aiThumb').src='data:image/jpeg;base64,'+aiImg;}
+function aiSend(text,image){
+  if(!aiReady())return Promise.reject(new Error('Sign in to use AI search.'));
+  if(!text&&!image){toast('Describe the food or add a photo');return Promise.resolve(null);}
+  aiBusy=true;$('aiGo').disabled=true;$('aiStatus').textContent=image?'Looking at your photo…':'Thinking…';$('aiResults').innerHTML='';
+  return sb.functions.invoke('ai-food',{body:image?{text:text,image:image,mime:'image/jpeg'}:{text:text}}).then(function(r){
+    if(r.error){var ctx=r.error.context;return (ctx&&ctx.json?ctx.json().catch(function(){return {};}):Promise.resolve({})).then(function(j){throw new Error(j.error||r.error.message||'AI request failed');});}
+    return r.data;
+  }).then(function(d){
+    aiItems=(d.items||[]).map(function(i){return {name:i.name,grams:num(i.grams),g0:num(i.grams)||100,serving:i.serving||'',base:{kcal:num(i.kcal),p:num(i.protein_g),c:num(i.carbs_g),f:num(i.fat_g),fib:num(i.fibre_g)},confidence:i.confidence,note:i.note||'',on:true};});
+    $('aiStatus').textContent=aiItems.length?(d.summary||'')+(d.limit?' ('+d.used+'/'+d.limit+' AI lookups today)':''):(d.summary||'No food recognised. Try describing it.');
+    renderAI();return d;
+  },function(e){$('aiStatus').textContent=e.message;throw e;}).then(function(d){aiBusy=false;$('aiGo').disabled=false;return d;},function(e){aiBusy=false;$('aiGo').disabled=false;return null;});
+}
+function aiVals(it){var k=it.g0>0&&it.grams>0?it.grams/it.g0:1;return {kcal:r0(it.base.kcal*k),p:r1(it.base.p*k),c:r1(it.base.c*k),f:r1(it.base.f*k),fib:r1(it.base.fib*k)};}
+function renderAI(){
+  var tot={kcal:0,p:0};
+  $('aiResults').innerHTML=aiItems.map(function(it,i){var v=aiVals(it);if(it.on){tot.kcal+=v.kcal;tot.p+=v.p;}
+    return '<div class="aiitem'+(it.on?'':' off')+'"><div class="row"><input type="checkbox" data-ai="'+i+'" data-af="on" '+(it.on?'checked':'')+' style="flex:0;width:auto;min-height:0">'+
+      '<input data-ai="'+i+'" data-af="name" value="'+esc(it.name)+'"><span class="src conf-'+esc(it.confidence)+'">'+esc(it.confidence||'')+'</span></div>'+
+      '<div class="row" style="margin-top:6px"><input type="number" inputmode="decimal" data-ai="'+i+'" data-af="grams" value="'+(it.grams||'')+'" style="flex:0 0 90px"><span class="mut">g'+(it.serving?' · '+esc(it.serving):'')+'</span></div>'+
+      '<div class="mut" style="margin-top:4px"><b style="color:var(--txt)">'+v.kcal+' kcal</b> · P '+v.p+' · C '+v.c+' · F '+v.f+' · Fib '+v.fib+'</div>'+(it.note?'<div class="mut"><i>'+esc(it.note)+'</i></div>':'')+'</div>';}).join('');
+  $('aiAddW').hidden=!aiItems.length;$('aiTot').textContent=aiItems.length?r0(tot.kcal)+' kcal · '+r0(tot.p)+' g protein selected':'';
+}
+function aiAdd(){
+  var meal=$('aiMeal').value,n=0;
+  aiItems.forEach(function(it){if(!it.on)return;var v=aiVals(it);
+    addEntry({id:uid(),meal:meal,name:it.name,amount:(it.grams?r0(it.grams)+' g':'')+(it.serving&&it.grams!==it.g0?'':it.serving?(it.grams?' · ':'')+it.serving:''),kcal:v.kcal,p:v.p,c:v.c,f:v.f,fib:v.fib,src:'ai'});n++;});
+  if(!n){toast('Tick at least one item');return;}
+  hideDlg('dlgAI');aiItems=[];aiImg=null;$('aiQ').value='';$('aiResults').innerHTML='';$('aiStatus').textContent='';aiShowImg();toast('Added '+n+' item'+(n>1?'s':'')+' from AI');render();
+}
+function bindAI(){
+  $('btnAI').hidden=!cloudOn();
+  $('btnAI').onclick=openAI;$('aiClose').onclick=function(){hideDlg('dlgAI');};
+  $('aiSignIn').onclick=function(){hideDlg('dlgAI');go('more');};
+  $('aiGo').onclick=function(){aiSend($('aiQ').value.trim().slice(0,500),aiImg);};
+  $('aiPhoto').onchange=function(){var f=this.files[0];this.value='';if(!f)return;$('aiStatus').textContent='Preparing photo…';
+    downscale(f,1024,function(err,b64){if(err){$('aiStatus').textContent=err.message;return;}aiImg=b64;aiShowImg();$('aiStatus').textContent='Photo ready. Add a note (optional), then tap Ask AI.';});};
+  $('aiNoPhoto').onclick=function(){aiImg=null;aiShowImg();};
+  $('aiResults').addEventListener('input',function(e){var t=e.target,i=t.dataset.ai;if(i==null)return;var it=aiItems[+i];
+    if(t.dataset.af==='on')it.on=t.checked;else if(t.dataset.af==='name')it.name=t.value;else if(t.dataset.af==='grams')it.grams=num(t.value);
+    if(t.dataset.af!=='name')renderAI();});
+  $('aiResults').addEventListener('change',function(e){if(e.target.dataset.af==='on'){aiItems[+e.target.dataset.ai].on=e.target.checked;renderAI();}});
+  $('aiAdd').onclick=aiAdd;
+}
+
 // ---- events
 function bind(){
   document.querySelectorAll('.mealSel').forEach(function(s){s.innerHTML=MEALS.map(function(m){return '<option>'+m+'</option>';}).join('');});
@@ -1387,13 +1471,13 @@ function bind(){
       if(!confirm('Replace all current data with this backup?'))return;var sy=S.sync;S=d;load();S.sync=sy;save();render();ensureSetup();toast('Imported');}catch(e){toast('Not a valid backup file');}};
     rd.readAsText(f);this.value='';};
   $('btnReset').onclick=resetEverything;
-  bindExtra();bindEx();
+  bindExtra();bindEx();bindAI();
 }
 setInterval(function(){var n=iso(new Date());if(n!==TODAY){var wasToday=cur===TODAY;TODAY=n;if(wasToday)cur=n;render();}},60000);
 
 load();persist();bind();render();ensureSetup();cloudInit();
 window.Tracker=window.KymTracker={state:function(){return S;},quickAdd:quickAdd,totals:totals,toCSV:toCSV,go:go,setDay:function(d){cur=d;render();},
-  search:search,parseQty:parseQty,calcPick:calcPick,openPick:openPick,offSearch:offSearch,offBarcode:offBarcode,offItem:offItem,computeStats:computeStats,exApi:function(){return {lib:EXLIB,person:personInfo,strengthCalc:strengthCalc,cardioCalc:cardioCalc,findEx:findEx,searchEx:searchEx,openEx:openEx,saveEx:saveExEntry,lastTime:lastTime,setsSummary:setsSummary};},ownDaily:ownDaily,renderSummary:renderSummary,localRecords:localRecords,syncNow:syncNow,cloud:function(){return {sb:sb,user:cUser,partner:partner,links:links,err:cloudErr};},dbCount:DB.length,doOffSearch:doOffSearch,doBarcode:doBarcode};
+  search:search,parseQty:parseQty,calcPick:calcPick,openPick:openPick,offSearch:offSearch,offBarcode:offBarcode,offItem:offItem,computeStats:computeStats,aiApi:function(){return {send:aiSend,downscale:downscale,items:function(){return aiItems;},render:renderAI,add:aiAdd,open:openAI};},exApi:function(){return {lib:EXLIB,person:personInfo,strengthCalc:strengthCalc,cardioCalc:cardioCalc,findEx:findEx,searchEx:searchEx,openEx:openEx,saveEx:saveExEntry,lastTime:lastTime,setsSummary:setsSummary};},ownDaily:ownDaily,renderSummary:renderSummary,localRecords:localRecords,syncNow:syncNow,cloud:function(){return {sb:sb,user:cUser,partner:partner,links:links,err:cloudErr};},dbCount:DB.length,doOffSearch:doOffSearch,doBarcode:doBarcode};
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 })();
 </script>
