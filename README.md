@@ -1,3 +1,3 @@
 # Tracker
 
-Food and exercise tracker (static PWA). Log data is stored in the browser on each device. Optional account sync is off until configured.
+Food and exercise tracker (static PWA). Data is cached on each device and, when signed in, synced to Supabase (row-level security; only the public publishable key is in this repo).
