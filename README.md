@@ -1,3 +1,3 @@
-# Kym Tracker
+# Tracker
 
-Personal food and exercise tracker (static PWA). All log data stays in the browser on the device that uses it.
+Food and exercise tracker (static PWA). Log data is stored in the browser on each device. Optional account sync is off until configured.

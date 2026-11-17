@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Kym Tracker">
-<title>Kym Tracker</title>
+<meta name="apple-mobile-web-app-title" content="Tracker">
+<title>Tracker</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
@@ -60,6 +60,10 @@ canvas{width:100%;height:220px;display:block}
 video{width:100%;border-radius:12px;background:#000;max-height:40vh}
 textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
 .steve{width:100%;margin-top:8px}
+.svgwrap svg.chart{width:100%;height:auto;display:block}
+table.cmp td:not(:first-child),table.cmp th:not(:first-child){text-align:right}
+nav button{font-size:11px;padding:6px 2px}
+#setupBanner{display:flex;align-items:center;justify-content:space-between;gap:8px}#setupBanner[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -71,6 +75,7 @@ textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
 <main>
 <!-- TODAY -->
 <section class="page on" id="p-today">
+  <div class="card hint" id="setupBanner" hidden>Your profile isn't set up yet. <button class="sm pri" id="btnSetupBanner">Set up profile</button></div>
   <div class="card"><div class="rings" id="rings"></div></div>
   <div class="card"><h2>Macros</h2><div id="macroBars"></div></div>
   <div class="card"><h2>Water</h2>
@@ -126,12 +131,26 @@ textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
   <div class="card"><h2>All weigh-ins</h2><div id="wList"></div></div>
 </section>
 
+<!-- SUMMARY -->
+<section class="page" id="p-summary" data-build="summary-v3">
+  <div class="card" id="sumEmpty" hidden><h2>Summary</h2><p>Nothing to summarise yet. Log some food and a weigh-in or two, and your averages, trend and projections will show up here.</p></div>
+  <div class="card"><h2>Averages</h2><div id="sumAvg"></div></div>
+  <div class="card"><h2>Weight trend</h2><div id="sumWChart" class="svgwrap"></div>
+    <p class="mut" style="margin:4px 0 8px"><span style="color:var(--acc)">●</span> weigh-ins · <span class="g">┅</span> 7-day average · <span style="color:var(--f)">┅</span> trend line</p>
+    <div class="grid4" id="sumWStats" style="grid-template-columns:repeat(3,1fr)"></div><p id="sumProj" class="hint"></p></div>
+  <div class="card"><h2>Adherence &amp; streaks</h2><div id="sumAdh"></div></div>
+  <div class="card"><h2>Weekly average calories</h2><div id="sumWeekly" class="svgwrap"></div></div>
+  <div class="card" id="partnerCard" hidden><h2>Partner</h2><div id="partnerBox"></div></div>
+</section>
+
 <!-- MORE -->
 <section class="page" id="p-more">
   <div class="card"><h2>History (last 30 days)</h2>
     <table><thead><tr><th>Date</th><th>kcal</th><th>Protein</th><th>Fibre</th><th>Ex min</th></tr></thead><tbody id="histBody"></tbody></table>
     <p class="mut"><span class="g">●</span> within target · <span class="y">●</span> close · <span class="r">●</span> off target</p>
   </div>
+  <div class="card"><h2>Profile</h2><div id="profBox"></div><button id="btnEditProfile" style="width:100%;margin-top:8px">Edit profile</button></div>
+  <div class="card" id="acctCard" hidden><h2>Account &amp; partner</h2><div id="acctBox"></div></div>
   <div class="card"><h2>Targets</h2>
     <div class="grid2">
       <div><label>kcal min</label><input id="tKcalMin" type="number"></div><div><label>kcal max</label><input id="tKcalMax" type="number"></div>
@@ -139,13 +158,12 @@ textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
       <div><label>Protein min (g)</label><input id="tPMin" type="number"></div><div><label>Protein max (g)</label><input id="tPMax" type="number"></div>
       <div><label>Protein target (g)</label><input id="tP" type="number"></div><div><label>Fibre target (g)</label><input id="tFib" type="number"></div>
       <div><label>Carbs guide (g)</label><input id="tC" type="number"></div><div><label>Fat guide (g)</label><input id="tF" type="number"></div>
-      <div><label>Body weight for exercise estimate (kg)</label><input id="tBW" type="number" step="0.1"></div>
     </div>
     <button class="pri" id="btnSaveT" style="width:100%;margin-top:10px">Save targets</button>
   </div>
   <div class="card"><h2>Data</h2>
     <div class="grid2"><button id="btnExpJ">Export JSON</button><button id="btnExpC">Export CSV</button>
-    <button id="btnImp">Import JSON</button><button class="danger" id="btnReset">Reset all</button></div>
+    <button id="btnImp">Import JSON</button><button class="danger" id="btnReset">Reset everything</button></div>
     <input type="file" id="impFile" accept="application/json,.json" hidden>
     <p class="mut">Data is stored only on this device (in this browser). Export a backup now and then.</p>
     <p class="mut">Built-in food values are approximate (based on typical AUSNUT/USDA-style figures and published takeaway nutrition). Check the label when you have it. Online results come from Open Food Facts, which is a community database.</p>
@@ -158,6 +176,7 @@ textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
   <button data-tab="food"><span>🍽</span>Food</button>
   <button data-tab="exercise"><span>🏃</span>Exercise</button>
   <button data-tab="weight"><span>⚖︎</span>Weight</button>
+  <button data-tab="summary"><span>📈</span>Summary</button>
   <button data-tab="more"><span>☰</span>More</button>
 </nav>
 
@@ -219,6 +238,22 @@ textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
   <div class="row" style="margin-top:12px"><button type="button" id="sfCancel">Cancel</button><button type="button" class="danger" id="sfDel" hidden>Delete</button><button class="pri" type="submit">Save</button></div>
 </form></dialog>
 
+<!-- First-run setup / profile -->
+<dialog id="dlgSetup"><form method="dialog" id="fSetup">
+  <h3 style="margin-top:0" id="suTitle">Welcome! Quick setup</h3>
+  <p class="mut" id="suIntro">This sets your targets. Everything is saved on this phone.</p>
+  <div class="hint" id="suExisting" hidden></div>
+  <label>Name</label><input id="suName" required autocomplete="given-name">
+  <div class="grid2"><div><label>Sex</label><select id="suSex"><option value="">Prefer not to say</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+  <div><label>Height (cm, optional)</label><input id="suCm" type="number" step="0.5" inputmode="decimal"></div>
+  <div><label>Current weight (kg)</label><input id="suKg" type="number" step="0.1" inputmode="decimal" required></div>
+  <div><label>Goal weight (kg)</label><input id="suGoal" type="number" step="0.1" inputmode="decimal"></div>
+  <div><label>Daily kcal target</label><input id="suKcal" type="number" inputmode="numeric" value="1500"></div>
+  <div><label>Protein target (g)</label><input id="suP" type="number" inputmode="numeric" value="120"></div></div>
+  <p class="mut">Water 3 L and fibre 30 g by default. You can fine-tune everything later under More → Targets.</p>
+  <div class="row" style="margin-top:12px"><button type="button" id="suSignIn" hidden>Sign in instead</button><button type="button" id="suLater">Later</button><button class="pri" type="submit">Save</button></div>
+</form></dialog>
+
 <!-- Send to Steve -->
 <dialog id="dlgSteve"><div>
   <div class="row"><h3 style="margin:0">Send to Steve</h3><button class="sm" id="stClose" style="flex:0">Close</button></div>
@@ -233,6 +268,7 @@ textarea{min-height:240px;font:13px/1.4 ui-monospace,Menlo,monospace}
 (function(){
 'use strict';
 var KEY='kymTracker.v1';
+var CLOUD_CFG={url:"",anonKey:""};
 var MEALS=['Breakfast','Lunch','Dinner','Snack','Drink'];
 var EX_TYPES={'Walk':3.5,'Incline treadmill':6,'Cycling':6.8,'Swim':6,'Light weights high reps':3.5,'Other':4};
 var FOODDB={"cats":["Meat & poultry","Seafood","Eggs & dairy","Supplements","Breads & cereals","Rice, pasta & noodles","Vegetables","Fruit","Legumes & tofu","Nuts & seeds","Oils, sauces & condiments","Asian dishes","Italian","Takeaway & caf\u00e9","Drinks","Alcohol (kcal includes alcohol)","Snacks & sweets"],"db":[["Chicken breast, skinless, cooked",0,"100 g",100.0,165.0,31.0,0.0,3.6,0.0],["Chicken breast, skinless, raw",0,"100 g",100.0,120.0,22.5,0.0,2.6,0.0],["Chicken thigh, skinless, cooked",0,"100 g",100.0,209.0,26.0,0.0,10.9,0.0],["Chicken thigh, skinless, raw",0,"100 g",100.0,144.0,19.7,0.0,6.6,0.0],["Chicken drumstick, with skin, cooked",0,"1 drumstick",75.0,216.0,27.0,0.0,11.2,0.0],["Chicken wing, cooked",0,"1 wing",35.0,290.0,27.0,0.0,19.5,0.0],["Roast chicken, with skin",0,"100 g",100.0,239.0,27.0,0.0,13.6,0.0],["Roast chicken, skin removed",0,"100 g",100.0,190.0,29.0,0.0,7.4,0.0],["Chicken mince, cooked",0,"100 g",100.0,190.0,24.0,0.0,10.0,0.0],["Turkey breast, cooked",0,"100 g",100.0,147.0,30.0,0.0,2.0,0.0],["Beef mince, lean (5 star), cooked",0,"100 g",100.0,210.0,27.0,0.0,11.0,0.0],["Beef mince, lean (5 star), raw",0,"100 g",100.0,137.0,21.0,0.0,5.8,0.0],["Beef mince, regular, cooked",0,"100 g",100.0,254.0,26.0,0.0,17.0,0.0],["Beef mince, regular, raw",0,"100 g",100.0,230.0,18.0,0.0,17.0,0.0],["Rump steak, cooked",0,"1 steak 200 g",200.0,190.0,30.0,0.0,7.5,0.0],["Rump steak, raw",0,"100 g",100.0,135.0,22.0,0.0,5.0,0.0],["Scotch fillet, cooked",0,"1 steak 250 g",250.0,250.0,26.0,0.0,16.0,0.0],["Scotch fillet, raw",0,"100 g",100.0,200.0,19.0,0.0,14.0,0.0],["Eye fillet, cooked",0,"1 steak 180 g",180.0,200.0,29.0,0.0,9.0,0.0],["Porterhouse/sirloin, cooked",0,"1 steak 220 g",220.0,210.0,29.0,0.0,10.0,0.0],["Porterhouse/sirloin, raw",0,"100 g",100.0,150.0,22.0,0.0,7.0,0.0],["Flank steak, cooked",0,"100 g",100.0,200.0,28.0,0.0,10.0,0.0],["Flank steak, raw",0,"100 g",100.0,155.0,21.0,0.0,7.5,0.0],["Beef stir-fry strips, cooked",0,"100 g",100.0,190.0,29.0,0.0,8.0,0.0],["Beef stir-fry strips, raw",0,"100 g",100.0,140.0,22.0,0.0,5.5,0.0],["Corned beef (silverside), cooked",0,"100 g",100.0,200.0,26.0,0.5,10.0,0.0],["Roast beef, deli sliced",0,"2 slices",40.0,120.0,22.0,0.5,3.0,0.0],["Lamb leg roast, cooked",0,"100 g",100.0,210.0,28.0,0.0,10.5,0.0],["Lamb cutlet, grilled",0,"1 cutlet",40.0,290.0,25.0,0.0,21.0,0.0],["Lamb loin chop, cooked",0,"1 chop",70.0,270.0,26.0,0.0,18.0,0.0],["Lamb mince, cooked",0,"100 g",100.0,280.0,24.0,0.0,20.0,0.0],["Pork loin chop, cooked",0,"1 chop",150.0,200.0,29.0,0.0,9.0,0.0],["Pork belly, roasted",0,"100 g",100.0,520.0,9.0,0.0,53.0,0.0],["Pork mince, cooked",0,"100 g",100.0,260.0,25.0,0.0,17.0,0.0],["Pork fillet/tenderloin, cooked",0,"100 g",100.0,145.0,26.0,0.0,4.0,0.0],["Bacon, short cut, cooked",0,"1 rasher",20.0,240.0,30.0,1.0,13.0,0.0],["Bacon, middle rasher, cooked",0,"1 rasher",30.0,400.0,30.0,1.0,30.0,0.0],["Ham, leg, deli",0,"2 slices",40.0,110.0,18.0,1.5,3.5,0.0],["Salami",0,"3 slices",20.0,410.0,22.0,1.5,35.0,0.0],["Pepperoni",0,"5 slices",15.0,500.0,20.0,1.2,46.0,0.0],["Prosciutto",0,"2 slices",20.0,250.0,26.0,0.0,16.0,0.0],["Beef sausage, cooked",0,"1 sausage",65.0,280.0,13.0,6.0,23.0,0.5],["Pork sausage, cooked",0,"1 sausage",65.0,300.0,14.0,4.0,25.0,0.5],["Chicken sausage, cooked",0,"1 sausage",65.0,200.0,15.0,4.0,13.0,0.5],["Kangaroo fillet, cooked",0,"100 g",100.0,130.0,28.0,0.0,2.0,0.0],["Kangaroo fillet, raw",0,"100 g",100.0,98.0,22.0,0.0,1.0,0.0],["Kangaroo mince, cooked",0,"100 g",100.0,140.0,27.0,0.0,3.5,0.0],["Veal schnitzel, crumbed",0,"1 schnitzel",150.0,230.0,22.0,10.0,11.0,0.5],["Chicken schnitzel, crumbed, fried",0,"1 schnitzel",200.0,260.0,20.0,13.0,14.0,0.8],["Beef meatballs",0,"5 meatballs",100.0,250.0,17.0,8.0,17.0,0.5],["Beef jerky",0,"1 pack",25.0,300.0,48.0,10.0,6.0,0.0],["Biltong",0,"1 pack",30.0,270.0,55.0,3.0,4.0,0.0],["Duck, roast, with skin",0,"100 g",100.0,337.0,19.0,0.0,28.0,0.0],["Chicken nuggets, frozen, baked",0,"6 nuggets",100.0,260.0,14.0,17.0,15.0,1.0],["Rotisserie chicken breast, no skin",0,"100 g",100.0,170.0,30.0,0.0,5.0,0.0],["Salmon, Atlantic, cooked",1,"1 fillet 150 g",150.0,206.0,22.0,0.0,12.4,0.0],["Salmon, Atlantic, raw",1,"100 g",100.0,180.0,20.0,0.0,11.0,0.0],["Salmon sashimi",1,"5 pieces",75.0,208.0,20.0,0.0,13.4,0.0],["Smoked salmon",1,"3 slices",50.0,117.0,18.0,0.0,4.3,0.0],["Canned pink salmon (with bones)",1,"1 small can 95 g",95.0,140.0,20.0,0.0,6.5,0.0],["Barramundi, cooked",1,"1 fillet 150 g",150.0,120.0,24.0,0.0,2.5,0.0],["Snapper, cooked",1,"1 fillet 150 g",150.0,128.0,26.0,0.0,1.7,0.0],["Basa/dory, cooked",1,"1 fillet 150 g",150.0,100.0,19.0,0.0,2.5,0.0],["Flathead, cooked",1,"1 fillet 120 g",120.0,110.0,24.0,0.0,1.0,0.0],["Tuna, canned in springwater, drained",1,"1 can 95 g",95.0,110.0,25.0,0.0,1.0,0.0],["Tuna, canned in oil, drained",1,"1 can 95 g",95.0,190.0,27.0,0.0,9.0,0.0],["Tuna steak, cooked",1,"1 steak 150 g",150.0,130.0,29.0,0.0,1.0,0.0],["Prawns, cooked, peeled",1,"10 prawns",100.0,100.0,22.0,0.0,1.0,0.0],["Prawns, raw, peeled",1,"100 g",100.0,85.0,20.0,0.0,0.5,0.0],["Calamari, grilled",1,"100 g",100.0,100.0,18.0,3.0,1.5,0.0],["Salt and pepper squid, fried",1,"1 serve",150.0,250.0,15.0,16.0,14.0,0.5],["Fish fingers, baked",1,"4 fingers",100.0,220.0,12.0,20.0,10.0,1.0],["Battered fish, fried",1,"1 fillet",150.0,230.0,15.0,15.0,12.0,0.5],["Grilled fish (white), generic",1,"1 fillet 150 g",150.0,115.0,23.0,0.0,2.0,0.0],["Mussels, cooked",1,"1 cup meat",150.0,170.0,24.0,7.0,4.5,0.0],["Oysters, raw",1,"6 oysters",90.0,70.0,9.0,4.0,2.0,0.0],["Scallops, cooked",1,"6 scallops",90.0,110.0,20.0,5.0,1.0,0.0],["Sardines, canned in oil, drained",1,"1 can 110 g",110.0,210.0,25.0,0.0,11.5,0.0],["Crab meat, cooked",1,"100 g",100.0,90.0,19.0,0.0,1.5,0.0],["Lobster, cooked",1,"100 g",100.0,90.0,19.0,0.0,0.9,0.0],["Egg, whole, large",2,"1 large egg",50.0,143.0,12.6,0.7,9.5,0.0],["Egg white",2,"1 egg white",33.0,52.0,10.9,0.7,0.2,0.0],["Egg yolk",2,"1 yolk",17.0,322.0,16.0,3.6,26.5,0.0],["Egg, fried",2,"1 egg",46.0,196.0,13.6,0.8,15.0,0.0],["Scrambled eggs (milk + butter)",2,"2 eggs",130.0,170.0,11.0,2.0,13.0,0.0],["Omelette, plain",2,"2-egg omelette",120.0,155.0,11.0,1.0,12.0,0.0],["Milk, full cream",2,"1 cup 250 ml",258.0,64.0,3.4,4.8,3.5,0.0],["Milk, light/reduced fat",2,"1 cup 250 ml",258.0,47.0,3.6,5.0,1.3,0.0],["Milk, skim",2,"1 cup 250 ml",258.0,35.0,3.5,5.0,0.1,0.0],["Milk, lactose-free full cream",2,"1 cup 250 ml",258.0,62.0,3.3,4.7,3.4,0.0],["Soy milk",2,"1 cup 250 ml",250.0,40.0,3.3,2.5,1.8,0.4],["Almond milk, unsweetened",2,"1 cup 250 ml",250.0,15.0,0.5,0.3,1.2,0.3],["Oat milk",2,"1 cup 250 ml",250.0,50.0,1.0,6.5,2.0,0.8],["Cheddar cheese",2,"1 slice",21.0,405.0,25.0,0.1,33.5,0.0],["Cheddar cheese, light",2,"1 slice",21.0,310.0,30.0,0.0,21.0,0.0],["Mozzarella",2,"1/4 cup grated",28.0,300.0,22.0,2.0,22.5,0.0],["Parmesan",2,"1 tbsp grated",10.0,390.0,35.0,0.0,27.0,0.0],["Feta",2,"1 cube",30.0,265.0,15.0,1.0,22.0,0.0],["Halloumi",2,"2 slices",50.0,320.0,22.0,2.0,25.0,0.0],["Cream cheese",2,"1 tbsp",20.0,330.0,6.0,4.0,33.0,0.0],["Cottage cheese, regular",2,"1/2 cup",113.0,100.0,11.0,3.0,4.5,0.0],["Bulla high protein cottage cheese",2,"2 tbsp ~60 g",60.0,75.0,12.5,3.3,0.8,0.0],["Ricotta",2,"1/4 cup",62.0,150.0,9.0,3.0,11.0,0.0],["Greek yoghurt, full fat",2,"1/2 cup",125.0,120.0,5.0,4.0,9.5,0.0],["Greek yoghurt, plain 0% fat",2,"1/2 cup",125.0,57.0,10.0,4.0,0.2,0.0],["Natural yoghurt",2,"1/2 cup",125.0,70.0,5.0,6.0,3.0,0.0],["Flavoured yoghurt, low fat",2,"1 tub",170.0,85.0,4.5,14.0,1.0,0.0],["High protein yoghurt (e.g. YoPRO)",2,"1 tub",160.0,63.0,9.0,5.0,0.2,0.0],["Butter",2,"1 tsp",5.0,720.0,0.9,0.5,80.0,0.0],["Margarine/spread",2,"1 tsp",5.0,530.0,0.2,0.5,59.0,0.0],["Thickened cream",2,"1 tbsp",20.0,340.0,2.0,3.0,35.0,0.0],["Sour cream",2,"1 tbsp",20.0,210.0,3.0,4.0,20.0,0.0],["Ice cream, vanilla",2,"1 scoop",50.0,200.0,3.5,24.0,10.0,0.5],["Custard",2,"1/2 cup",125.0,110.0,3.5,16.0,3.0,0.0],["Whey protein isolate (generic)",3,"1 scoop 30 g",30.0,375.0,90.0,3.0,1.5,0.0],["Whey protein concentrate (generic)",3,"1 scoop 30 g",30.0,400.0,78.0,7.0,6.0,0.0],["Plant protein powder (pea/rice)",3,"1 scoop 30 g",30.0,380.0,75.0,6.0,7.0,3.0],["Protein bar (generic)",3,"1 bar",60.0,360.0,33.0,30.0,12.0,8.0],["Psyllium husk",3,"1 tbsp",10.0,200.0,0.0,80.0,0.0,70.0],["Collagen powder",3,"1 scoop",10.0,360.0,90.0,0.0,0.0,0.0],["Creatine monohydrate",3,"1 tsp",5.0,0.0,0.0,0.0,0.0,0.0],["Electrolyte drink, sugar-free",3,"1 bottle",600.0,1.0,0.0,0.2,0.0,0.0],["White bread",4,"1 slice",36.0,245.0,8.5,45.0,2.5,2.7],["Wholemeal bread",4,"1 slice",38.0,230.0,10.0,38.0,3.0,6.5],["Multigrain bread",4,"1 slice",40.0,250.0,10.0,40.0,4.0,6.0],["Sourdough bread",4,"1 slice",50.0,250.0,9.0,48.0,1.5,2.5],["Rye bread",4,"1 slice",40.0,240.0,8.0,45.0,2.5,6.0],["Low carb / protein bread (generic)",4,"1 slice",40.0,240.0,22.0,8.0,11.0,12.0],["Bread roll, white",4,"1 roll",60.0,270.0,9.0,50.0,3.0,2.5],["Turkish bread",4,"1/4 loaf",100.0,270.0,9.0,52.0,2.5,2.5],["Wrap/tortilla, plain",4,"1 wrap",60.0,300.0,8.5,50.0,7.0,3.0],["Low carb wrap",4,"1 wrap",40.0,260.0,16.0,30.0,9.0,15.0],["Pita bread",4,"1 pita",60.0,275.0,9.0,55.0,1.2,2.0],["English muffin",4,"1 muffin",67.0,230.0,8.0,45.0,2.0,2.5],["Crumpet",4,"1 crumpet",50.0,190.0,6.0,38.0,0.8,1.8],["Bagel",4,"1 bagel",95.0,260.0,10.0,50.0,1.5,2.3],["Croissant",4,"1 croissant",60.0,400.0,8.0,45.0,21.0,2.5],["Banh mi roll / baguette",4,"1 roll",100.0,270.0,9.0,54.0,2.0,2.5],["Garlic bread",4,"1 slice",30.0,350.0,8.0,42.0,17.0,2.0],["Rolled oats, dry",4,"1/2 cup",40.0,375.0,12.5,58.0,8.5,10.0],["Porridge, made with water",4,"1 cup",250.0,70.0,2.5,11.0,1.5,1.7],["Weet-Bix",4,"2 biscuits",33.0,350.0,12.0,62.0,1.4,11.0],["Muesli, toasted / granola",4,"1/2 cup",45.0,440.0,9.0,58.0,17.0,7.0],["Muesli, natural",4,"1/2 cup",50.0,370.0,10.0,58.0,8.0,9.0],["Cornflakes",4,"1 cup",30.0,375.0,7.0,85.0,0.6,3.0],["Rice Bubbles",4,"1 cup",30.0,385.0,6.0,87.0,0.8,1.5],["White rice, cooked",5,"1 cup",185.0,130.0,2.7,28.0,0.3,0.4],["White rice, dry",5,"1/3 cup",65.0,360.0,7.0,79.0,0.6,1.3],["Jasmine rice, cooked",5,"1 cup",185.0,130.0,2.7,28.0,0.3,0.4],["Basmati rice, cooked",5,"1 cup",185.0,121.0,3.5,25.0,0.4,0.5],["Brown rice, cooked",5,"1 cup",195.0,112.0,2.6,23.0,0.9,1.8],["Brown rice, dry",5,"1/3 cup",65.0,360.0,7.5,76.0,2.7,3.5],["Microwave rice pouch",5,"1/2 pouch",125.0,150.0,3.0,31.0,1.5,0.8],["Sticky/glutinous rice, cooked",5,"1 cup",175.0,97.0,2.0,21.0,0.2,1.0],["Quinoa, cooked",5,"1 cup",185.0,120.0,4.4,21.0,1.9,2.8],["Couscous, cooked",5,"1 cup",160.0,112.0,3.8,23.0,0.2,1.4],["Pasta, dry",5,"1 serve",75.0,355.0,12.5,72.0,1.5,3.0],["Pasta, cooked",5,"1 cup",140.0,158.0,5.8,31.0,0.9,1.8],["Wholemeal pasta, cooked",5,"1 cup",140.0,150.0,6.0,28.0,1.5,4.0],["Gnocchi, potato, cooked",5,"1 cup",190.0,130.0,3.0,28.0,0.5,1.5],["Egg noodles, cooked",5,"1 cup",160.0,138.0,4.5,25.0,2.0,1.2],["Egg noodles, dry",5,"1 nest",50.0,384.0,14.0,70.0,4.5,3.0],["Hokkien noodles",5,"1 cup",160.0,160.0,5.0,32.0,1.5,1.5],["Rice noodles (pho), cooked",5,"1 cup",175.0,108.0,1.8,24.0,0.2,1.0],["Rice noodles (pho), dry",5,"1 serve",60.0,360.0,6.0,80.0,0.6,1.6],["Rice vermicelli, dry",5,"1 serve",50.0,360.0,7.0,80.0,0.6,1.0],["Rice vermicelli, cooked",5,"1 cup",175.0,110.0,1.8,25.0,0.2,1.0],["Rice paper sheet",5,"1 sheet",10.0,330.0,2.0,75.0,0.0,0.5],["Udon noodles, cooked",5,"1 cup",200.0,105.0,2.6,21.0,0.4,1.0],["Soba noodles, cooked",5,"1 cup",115.0,99.0,5.0,21.0,0.1,1.5],["Instant noodles (pack, dry, with flavour)",5,"1 pack",85.0,460.0,9.5,61.0,19.0,2.5],["Shirataki/konjac noodles",5,"1 pack",200.0,9.0,0.0,3.0,0.0,3.0],["Broccoli",6,"1 cup",90.0,34.0,2.8,6.6,0.4,2.6],["Broccolini",6,"1 bunch",175.0,35.0,3.5,5.0,0.4,3.0],["Cauliflower",6,"1 cup",100.0,25.0,1.9,5.0,0.3,2.0],["Cauliflower rice",6,"1 cup",110.0,25.0,1.9,5.0,0.3,2.0],["Spinach",6,"1 cup raw",30.0,23.0,2.9,3.6,0.4,2.2],["Kale",6,"1 cup raw",20.0,49.0,4.3,8.8,0.9,3.6],["Rocket",6,"1 cup",20.0,25.0,2.6,3.7,0.7,1.6],["Bok choy",6,"1 cup",70.0,13.0,1.5,2.2,0.2,1.0],["Gai lan (Chinese broccoli)",6,"1 cup",90.0,22.0,1.1,3.8,0.7,2.5],["Cabbage",6,"1 cup",90.0,25.0,1.3,5.8,0.1,2.5],["Iceberg lettuce",6,"1 cup",55.0,14.0,0.9,3.0,0.1,1.2],["Cos lettuce",6,"1 cup",50.0,17.0,1.2,3.3,0.3,2.1],["Mixed salad leaves",6,"1 cup",40.0,18.0,1.6,3.0,0.3,1.8],["Carrot",6,"1 medium",70.0,41.0,0.9,9.6,0.2,2.8],["Zucchini",6,"1 medium",200.0,17.0,1.2,3.1,0.3,1.0],["Capsicum, red",6,"1 medium",120.0,31.0,1.0,6.0,0.3,2.1],["Capsicum, green",6,"1 medium",120.0,20.0,0.9,4.6,0.2,1.7],["Tomato",6,"1 medium",120.0,18.0,0.9,3.9,0.2,1.2],["Cherry tomatoes",6,"1 cup",150.0,18.0,0.9,3.9,0.2,1.2],["Cucumber",6,"1/2 cucumber",150.0,15.0,0.7,3.6,0.1,0.5],["Onion",6,"1 medium",150.0,40.0,1.1,9.3,0.1,1.7],["Spring onion",6,"1 stalk",15.0,32.0,1.8,7.3,0.2,2.6],["Garlic",6,"1 clove",3.0,149.0,6.4,33.0,0.5,2.1],["Mushrooms",6,"1 cup",70.0,22.0,3.1,3.3,0.3,1.0],["Green beans",6,"1 cup",110.0,31.0,1.8,7.0,0.2,2.7],["Snow peas",6,"1 cup",100.0,42.0,2.8,7.5,0.2,2.6],["Peas, frozen",6,"1/2 cup",80.0,81.0,5.4,14.5,0.4,5.1],["Sweet corn kernels",6,"1/2 cup",80.0,86.0,3.3,19.0,1.4,2.0],["Corn cob",6,"1 cob",90.0,86.0,3.3,19.0,1.4,2.0],["Corn/carrot/pea mix, frozen",6,"1 cup",140.0,64.0,2.9,12.0,0.6,3.5],["Potato, boiled",6,"1 medium",150.0,87.0,1.9,20.0,0.1,1.8],["Potato, baked with skin",6,"1 medium",170.0,93.0,2.5,21.0,0.1,2.2],["Mashed potato (milk + butter)",6,"1 cup",210.0,105.0,2.0,16.0,4.0,1.5],["Sweet potato, baked",6,"1 medium",150.0,90.0,2.0,21.0,0.2,3.3],["Pumpkin, butternut, roasted",6,"1 cup",140.0,45.0,1.0,11.0,0.1,2.5],["Eggplant",6,"1 cup",100.0,25.0,1.0,6.0,0.2,3.0],["Asparagus",6,"5 spears",80.0,20.0,2.2,3.9,0.1,2.1],["Celery",6,"1 stalk",40.0,16.0,0.7,3.0,0.2,1.6],["Beetroot, canned",6,"2 slices",40.0,45.0,1.5,9.0,0.1,2.0],["Avocado",6,"1/2 avocado",75.0,160.0,2.0,8.5,14.7,6.7],["Bean sprouts",6,"1 cup",100.0,30.0,3.0,5.9,0.2,1.8],["Brussels sprouts",6,"1 cup",90.0,43.0,3.4,9.0,0.3,3.8],["Edamame, shelled",6,"1/2 cup",75.0,121.0,12.0,9.0,5.0,5.0],["Coleslaw with dressing",6,"1 cup",120.0,150.0,1.0,13.0,10.0,2.0],["Stir-fry vegetable mix, frozen",6,"1 cup",100.0,35.0,2.0,6.0,0.3,2.5],["Kimchi",6,"1/2 cup",75.0,15.0,1.1,2.4,0.5,1.6],["Fresh herbs (mint, coriander, basil)",6,"1/4 cup",5.0,30.0,3.0,5.0,0.6,3.0],["Chilli, fresh",6,"1 chilli",5.0,40.0,1.9,9.0,0.4,1.5],["Apple",7,"1 medium",180.0,52.0,0.3,14.0,0.2,2.4],["Banana",7,"1 medium",120.0,89.0,1.1,23.0,0.3,2.6],["Orange",7,"1 medium",150.0,47.0,0.9,12.0,0.1,2.4],["Mandarin",7,"1 medium",90.0,53.0,0.8,13.0,0.3,1.8],["Kiwi fruit",7,"1 kiwi",75.0,61.0,1.1,15.0,0.5,3.0],["Strawberries",7,"1 cup",150.0,32.0,0.7,7.7,0.3,2.0],["Blueberries",7,"1 cup",150.0,57.0,0.7,14.5,0.3,2.4],["Raspberries",7,"1 cup",125.0,52.0,1.2,12.0,0.7,6.5],["Mixed berries, frozen",7,"1 cup",140.0,50.0,0.8,11.0,0.4,4.0],["Grapes",7,"1 cup",150.0,69.0,0.7,18.0,0.2,0.9],["Watermelon",7,"1 cup",150.0,30.0,0.6,7.6,0.2,0.4],["Rockmelon",7,"1 cup",160.0,34.0,0.8,8.0,0.2,0.9],["Pineapple",7,"1 cup",165.0,50.0,0.5,13.0,0.1,1.4],["Mango",7,"1 cup",165.0,60.0,0.8,15.0,0.4,1.6],["Pear",7,"1 medium",180.0,57.0,0.4,15.0,0.1,3.1],["Peach",7,"1 medium",150.0,39.0,0.9,10.0,0.3,1.5],["Nectarine",7,"1 medium",140.0,44.0,1.0,10.5,0.3,1.7],["Plum",7,"1 plum",65.0,46.0,0.7,11.0,0.3,1.4],["Apricot",7,"1 apricot",35.0,48.0,1.4,11.0,0.4,2.0],["Cherries",7,"1 cup",140.0,63.0,1.1,16.0,0.2,2.1],["Lychees",7,"10 lychees",100.0,66.0,0.8,16.5,0.4,1.3],["Dragon fruit",7,"1 cup",200.0,60.0,1.2,13.0,0.4,3.0],["Passionfruit",7,"1 fruit",18.0,97.0,2.2,23.0,0.7,10.0],["Grapefruit",7,"1/2 fruit",120.0,42.0,0.8,10.7,0.1,1.6],["Pawpaw/papaya",7,"1 cup",145.0,43.0,0.5,11.0,0.3,1.7],["Medjool date",7,"1 date",24.0,277.0,1.8,75.0,0.2,6.7],["Sultanas/raisins",7,"1 small box",30.0,300.0,3.0,79.0,0.5,3.7],["Fruit salad, canned in juice",7,"1 cup",250.0,50.0,0.4,12.0,0.0,1.0],["Lemon/lime juice",7,"1 tbsp",15.0,22.0,0.4,7.0,0.2,0.3],["Chickpeas, canned, drained",8,"1/2 cup",100.0,120.0,6.5,16.0,2.5,5.0],["Lentils, cooked",8,"1 cup",200.0,116.0,9.0,20.0,0.4,7.9],["Red kidney beans, canned",8,"1/2 cup",100.0,100.0,7.0,14.0,0.5,6.0],["Black beans, canned",8,"1/2 cup",100.0,91.0,6.0,16.0,0.3,7.0],["Baked beans in tomato sauce",8,"1/2 can",210.0,80.0,4.7,11.5,0.4,5.0],["Four bean mix, canned",8,"1/2 cup",100.0,90.0,5.5,12.0,0.5,5.0],["Tofu, firm",8,"100 g",100.0,145.0,15.0,2.3,8.7,2.0],["Tofu, silken",8,"100 g",100.0,55.0,5.0,2.0,3.0,0.3],["Tofu puffs (fried)",8,"5 puffs",30.0,270.0,17.0,10.0,20.0,1.0],["Tempeh",8,"100 g",100.0,192.0,20.0,7.6,10.8,5.0],["Hummus",8,"2 tbsp",30.0,240.0,7.5,14.0,17.0,6.0],["Falafel",8,"3 pieces",60.0,330.0,13.0,32.0,18.0,5.0],["Almonds",9,"30 g handful",30.0,579.0,21.0,22.0,50.0,12.5],["Cashews",9,"30 g handful",30.0,580.0,18.0,30.0,46.0,3.3],["Peanuts, roasted",9,"30 g handful",30.0,585.0,24.0,21.0,50.0,8.0],["Walnuts",9,"30 g handful",30.0,654.0,15.0,14.0,65.0,6.7],["Macadamias",9,"30 g handful",30.0,718.0,8.0,14.0,76.0,8.6],["Pistachios, shelled",9,"30 g handful",30.0,560.0,20.0,28.0,45.0,10.0],["Mixed nuts",9,"30 g handful",30.0,600.0,18.0,20.0,53.0,7.0],["Peanut butter",9,"1 tbsp",20.0,600.0,25.0,16.0,50.0,6.0],["Almond butter",9,"1 tbsp",20.0,615.0,21.0,19.0,55.0,10.0],["Chia seeds",9,"1 tbsp",12.0,486.0,17.0,42.0,31.0,34.0],["Linseed/flaxseed",9,"1 tbsp",10.0,534.0,18.0,29.0,42.0,27.0],["Sunflower seeds",9,"1 tbsp",10.0,584.0,21.0,20.0,51.0,8.6],["Pumpkin seeds (pepitas)",9,"1 tbsp",10.0,560.0,30.0,11.0,49.0,6.0],["Sesame seeds",9,"1 tbsp",9.0,573.0,18.0,23.0,50.0,12.0],["Nutella",9,"1 tbsp",20.0,539.0,6.3,57.5,31.0,3.4],["Trail mix",9,"1/4 cup",35.0,480.0,13.0,45.0,28.0,5.0],["Olive oil / extra virgin olive oil",10,"1 tsp",4.5,884.0,0.0,0.0,100.0,0.0],["Canola/vegetable oil",10,"1 tsp",4.5,884.0,0.0,0.0,100.0,0.0],["Sesame oil",10,"1 tsp",4.5,884.0,0.0,0.0,100.0,0.0],["Coconut oil",10,"1 tsp",4.5,862.0,0.0,0.0,100.0,0.0],["Cooking oil spray",10,"1 second spray",0.5,884.0,0.0,0.0,100.0,0.0],["Mayonnaise, whole egg",10,"1 tbsp",15.0,680.0,1.0,1.0,75.0,0.0],["Mayonnaise, light",10,"1 tbsp",15.0,300.0,1.0,12.0,27.0,0.0],["Tomato sauce (ketchup)",10,"1 tbsp",17.0,105.0,1.2,25.0,0.2,0.5],["BBQ sauce",10,"1 tbsp",18.0,170.0,1.0,40.0,0.6,0.5],["Soy sauce",10,"1 tbsp",18.0,53.0,8.0,4.9,0.6,0.8],["Soy sauce, salt-reduced",10,"1 tbsp",18.0,60.0,7.0,7.0,0.5,0.5],["Fish sauce",10,"1 tbsp",18.0,35.0,5.0,3.6,0.0,0.0],["Sriracha",10,"1 tsp",6.0,93.0,1.9,19.0,0.9,2.0],["Nuoc cham (Vietnamese dipping sauce)",10,"2 tbsp",35.0,80.0,1.5,18.0,0.1,0.0],["Oyster sauce",10,"1 tbsp",18.0,51.0,1.4,11.0,0.3,0.3],["Hoisin sauce",10,"1 tbsp",16.0,220.0,3.3,44.0,3.4,2.8],["Sweet chilli sauce",10,"1 tbsp",18.0,230.0,0.4,56.0,0.2,1.0],["Chilli oil (e.g. Lee Kum Kee)",10,"1 tsp",6.0,600.0,1.5,5.0,63.0,1.0],["Crispy chilli oil (e.g. Lao Gan Ma)",10,"1 tsp",6.0,620.0,4.0,10.0,62.0,2.0],["Chilli sauce/paste (sambal)",10,"1 tsp",6.0,90.0,1.5,15.0,3.0,2.0],["Satay/peanut sauce",10,"2 tbsp",35.0,400.0,10.0,20.0,32.0,3.0],["Teriyaki sauce",10,"1 tbsp",18.0,90.0,6.0,16.0,0.0,0.0],["Kecap manis (sweet soy)",10,"1 tbsp",18.0,280.0,2.0,68.0,0.0,0.0],["Mustard, yellow/Dijon",10,"1 tsp",5.0,80.0,4.5,5.0,4.5,3.0],["Honey",10,"1 tsp",7.0,304.0,0.3,82.0,0.0,0.0],["Sugar, white",10,"1 tsp",4.0,400.0,0.0,100.0,0.0,0.0],["Maple syrup",10,"1 tbsp",20.0,260.0,0.0,67.0,0.0,0.0],["Jam",10,"1 tbsp",20.0,250.0,0.4,62.0,0.1,1.0],["Vegemite",10,"1 tsp",5.0,191.0,25.4,11.0,0.9,6.0],["Salsa",10,"2 tbsp",30.0,30.0,1.5,6.0,0.2,1.5],["Pesto",10,"1 tbsp",15.0,450.0,5.0,5.0,45.0,1.5],["Gravy, made up",10,"1/4 cup",60.0,40.0,1.0,7.0,1.0,0.0],["Caesar dressing",10,"1 tbsp",15.0,400.0,2.0,5.0,40.0,0.0],["Italian dressing",10,"1 tbsp",15.0,250.0,0.3,9.0,23.0,0.0],["Balsamic vinegar",10,"1 tbsp",16.0,88.0,0.5,17.0,0.0,0.0],["Tahini",10,"1 tbsp",15.0,595.0,17.0,21.0,54.0,9.0],["Pasta sauce, tomato (jar)",10,"1/2 cup",125.0,50.0,1.5,8.0,1.2,1.5],["Coconut milk, canned",10,"1/4 cup",60.0,200.0,2.0,3.0,20.0,0.0],["Coconut milk, light",10,"1/4 cup",60.0,75.0,0.8,2.0,7.0,0.0],["Miso paste",10,"1 tbsp",17.0,200.0,12.0,26.0,6.0,5.0],["Hot sauce (Tabasco-style)",10,"1 tsp",5.0,12.0,0.5,1.0,0.5,0.3],["Pho bo (beef pho), large bowl",11,"1 bowl",650.0,69.2,4.6,8.5,1.5,0.4],["Pho ga (chicken pho), large bowl",11,"1 bowl",650.0,64.6,4.9,8.5,1.1,0.4],["Banh mi, pork",11,"1 roll",230.0,226.1,9.6,26.1,8.7,1.3],["Banh mi, chicken",11,"1 roll",230.0,204.3,11.3,25.2,6.1,1.3],["Rice paper roll, fresh (prawn/pork)",11,"1 roll",70.0,121.4,7.1,18.6,1.7,1.4],["Spring roll, fried",11,"1 roll",50.0,260.0,6.0,24.0,16.0,2.0],["Vermicelli bowl with grilled pork (bun thit nuong)",11,"1 bowl",450.0,133.3,6.2,16.7,4.4,0.9],["Vermicelli bowl with spring rolls (bun cha gio)",11,"1 bowl",450.0,137.8,4.0,18.9,4.9,0.9],["Broken rice with grilled pork (com tam)",11,"1 plate",450.0,155.6,7.8,18.9,4.9,0.4],["Fried rice, chicken/special",11,"1 cup",200.0,175.0,5.5,24.0,6.0,1.0],["Laksa, chicken",11,"1 bowl",600.0,125.0,5.8,9.2,7.0,0.7],["Pad thai, chicken",11,"1 plate",400.0,162.5,7.0,18.8,6.2,0.8],["Chicken satay skewer",11,"1 skewer",40.0,200.0,22.5,5.0,10.0,0.5],["Butter chicken (no rice)",11,"1 cup",250.0,160.0,11.2,4.8,10.4,0.8],["Thai green curry, chicken (no rice)",11,"1 cup",250.0,132.0,8.8,3.2,9.2,0.8],["Beef rendang (no rice)",11,"1 cup",220.0,213.6,14.5,3.6,15.5,0.9],["Massaman beef curry (no rice)",11,"1 cup",250.0,200.0,10.0,8.0,14.0,1.2],["Sweet and sour pork",11,"1 cup",230.0,226.1,7.8,26.1,10.0,0.7],["Honey chicken",11,"1 cup",220.0,254.5,10.0,27.3,11.8,0.5],["Beef and black bean stir-fry",11,"1 cup",250.0,124.0,9.6,6.0,6.8,0.8],["Chicken and cashew stir-fry",11,"1 cup",250.0,152.0,11.2,6.0,9.2,1.0],["Dim sim, fried",11,"1 piece",40.0,250.0,10.0,20.0,15.0,1.2],["Dim sim, steamed",11,"1 piece",40.0,187.5,10.0,17.5,8.8,1.2],["Pork dumplings, steamed",11,"6 dumplings",150.0,193.3,8.7,20.0,8.0,1.0],["Gyoza, pan-fried",11,"5 pieces",125.0,224.0,9.6,22.4,10.4,1.2],["Xiao long bao",11,"6 pieces",180.0,183.3,8.3,16.7,8.9,0.6],["Sushi hand roll, salmon & avocado",11,"1 roll",120.0,166.7,5.0,29.2,3.3,0.8],["Sushi hand roll, teriyaki chicken",11,"1 roll",130.0,176.9,6.9,29.2,3.5,0.8],["Nigiri, salmon",11,"1 piece",35.0,157.1,8.6,22.9,3.7,0.3],["California roll",11,"8 pieces",230.0,150.0,4.0,28.0,3.0,1.0],["Ramen, tonkotsu",11,"1 bowl",600.0,125.0,5.0,13.3,5.3,0.5],["Bibimbap",11,"1 bowl",500.0,120.0,5.0,17.0,3.4,1.0],["Korean fried chicken",11,"6 pieces",200.0,290.0,15.0,15.0,18.5,0.5],["Chicken katsu curry with rice",11,"1 plate",500.0,170.0,6.4,22.0,6.0,0.8],["Nasi goreng",11,"1 plate",350.0,171.4,5.7,21.4,6.9,0.9],["Mee goreng",11,"1 plate",350.0,177.1,5.1,22.9,7.1,0.9],["Tom yum soup",11,"1 bowl",400.0,37.5,3.8,2.0,1.5,0.2],["Miso soup",11,"1 bowl",250.0,16.0,1.2,1.6,0.6,0.2],["Chicken teriyaki don",11,"1 bowl",450.0,155.6,7.8,22.2,3.6,0.4],["Poke bowl, salmon",11,"1 bowl",450.0,133.3,6.7,15.6,4.9,1.1],["Chicken pho noodle soup (instant cup)",11,"1 cup",70.0,371.4,7.1,64.3,10.0,1.4],["Spaghetti bolognese",12,"1 plate",400.0,140.0,7.0,17.5,4.5,1.2],["Pasta carbonara",12,"1 plate",350.0,200.0,8.0,21.4,9.1,0.9],["Lasagne, beef",12,"1 serve",300.0,150.0,8.3,11.7,7.7,1.0],["Fettuccine alfredo",12,"1 plate",350.0,220.0,6.3,22.9,11.4,0.9],["Gnocchi in tomato sauce",12,"1 plate",300.0,126.7,3.0,24.0,2.0,1.3],["Mushroom risotto",12,"1 cup",250.0,140.0,3.2,20.0,5.2,0.8],["Chicken parmigiana (no chips)",12,"1 parma",350.0,200.0,15.7,10.0,10.9,0.6],["Pizza slice, margherita",12,"1 slice (1/8 large)",100.0,250.0,11.0,30.0,10.0,2.0],["Pizza slice, pepperoni",12,"1 slice (1/8 large)",105.0,276.2,11.4,28.6,12.4,1.9],["Pizza slice, supreme/meat lovers",12,"1 slice (1/8 large)",120.0,266.7,11.7,25.8,12.5,1.7],["Minestrone soup",12,"1 cup",250.0,44.0,2.0,6.4,1.2,1.4],["Arancini",12,"1 ball",100.0,270.0,8.0,30.0,13.0,1.0],["Tiramisu",12,"1 slice",120.0,333.3,5.8,33.3,20.0,0.4],["McDonald's Big Mac",13,"1 burger",200.0,257.0,13.0,20.5,13.5,1.5],["McDonald's Quarter Pounder",13,"1 burger",200.0,260.0,15.0,18.5,14.0,1.2],["McDonald's Cheeseburger",13,"1 burger",120.0,250.0,13.3,25.8,10.0,1.2],["McDonald's McChicken",13,"1 burger",170.0,241.2,9.4,24.7,11.2,1.2],["McDonald's Chicken McNuggets",13,"6 pieces",100.0,260.0,15.0,16.0,15.0,1.0],["McDonald's fries, medium",13,"1 medium",115.0,287.0,3.5,36.5,13.9,3.5],["McDonald's fries, large",13,"1 large",150.0,286.7,3.3,36.7,14.0,3.3],["McDonald's Bacon & Egg McMuffin",13,"1 muffin",140.0,228.6,13.6,19.3,10.7,1.1],["McDonald's Sausage & Egg McMuffin",13,"1 muffin",165.0,260.6,13.9,16.4,15.8,0.9],["McDonald's hash brown",13,"1 hash brown",55.0,254.5,2.4,25.5,16.4,2.4],["Hungry Jack's Whopper",13,"1 burger",280.0,232.1,10.0,17.9,13.2,1.1],["Hungry Jack's Whopper Jr",13,"1 burger",150.0,226.7,10.0,20.0,12.0,1.3],["Hungry Jack's Cheeseburger",13,"1 burger",120.0,258.3,13.3,25.0,11.7,1.2],["Hungry Jack's chips, medium",13,"1 medium",120.0,291.7,3.3,37.5,14.2,3.3],["KFC Original Recipe chicken",13,"1 piece",100.0,260.0,20.0,8.0,16.0,0.5],["KFC Zinger burger",13,"1 burger",200.0,250.0,13.0,23.0,11.5,1.2],["KFC Twister",13,"1 wrap",230.0,243.5,11.3,21.7,12.2,1.3],["KFC popcorn chicken, regular",13,"1 regular",110.0,290.9,16.4,18.2,17.3,0.9],["KFC chips, regular",13,"1 regular",120.0,275.0,3.3,33.3,14.2,2.9],["Subway 6-inch Chicken Teriyaki",13,"1 sub",250.0,148.0,10.0,20.8,2.4,1.6],["Subway 6-inch Turkey",13,"1 sub",220.0,127.3,8.2,19.1,1.8,1.8],["Subway 6-inch Meatball",13,"1 sub",280.0,171.4,7.9,20.7,6.4,1.8],["Subway 6-inch Chicken Schnitzel",13,"1 sub",250.0,180.0,10.4,20.8,6.0,1.6],["Subway 6-inch Italian BMT",13,"1 sub",240.0,166.7,7.9,18.8,6.7,1.7],["Fish and chips (1 fillet + chips)",13,"1 serve",400.0,225.0,8.8,22.5,11.2,1.5],["Hot chips, takeaway",13,"small serve",150.0,312.0,3.4,41.0,15.0,3.8],["Potato cake/scallop",13,"1 piece",90.0,244.4,3.3,27.8,13.3,2.2],["Meat pie",13,"1 pie",175.0,257.1,8.6,20.0,16.0,1.1],["Sausage roll",13,"1 roll",130.0,307.7,7.7,23.1,20.8,1.2],["Chiko roll",13,"1 roll",165.0,218.2,5.5,27.3,9.7,1.8],["Doner kebab, lamb",13,"1 kebab",450.0,200.0,10.0,18.9,8.9,1.1],["Chicken kebab/wrap",13,"1 kebab",450.0,166.7,11.1,16.7,5.6,1.1],["Halal snack pack (HSP)",13,"1 pack",600.0,250.0,11.7,18.3,14.2,1.3],["Chicken burger (caf\u00e9)",13,"1 burger",280.0,214.3,11.4,17.9,10.7,1.1],["Burrito, chicken",13,"1 burrito",450.0,166.7,8.9,20.0,5.6,2.0],["Burrito bowl, chicken",13,"1 bowl",450.0,122.2,8.9,13.3,3.8,2.2],["Nachos with beef and cheese",13,"1 serve",400.0,237.5,8.8,20.0,13.8,2.0],["Bacon and egg roll",13,"1 roll",220.0,250.0,12.7,20.5,12.7,0.9],["Chicken caesar salad",13,"1 bowl",350.0,128.6,8.6,4.3,8.6,0.9],["Toasted ham and cheese sandwich",13,"1 toastie",180.0,250.0,12.2,22.2,12.2,1.4],["Smashed avocado on toast",13,"1 serve",250.0,180.0,4.8,16.0,10.4,3.6],["Big breakfast (caf\u00e9)",13,"1 plate",550.0,181.8,9.1,10.0,11.3,1.1],["Eggs benedict (ham)",13,"1 plate",300.0,216.7,10.0,11.7,14.0,0.7],["Coke Zero / Pepsi Max",14,"1 can 375 ml",375.0,0.3,0.0,0.0,0.0,0.0],["Coca-Cola (regular)",14,"1 can 375 ml",375.0,42.0,0.0,10.6,0.0,0.0],["Lemonade/Sprite (regular)",14,"1 can 375 ml",375.0,40.0,0.0,10.0,0.0,0.0],["Soda water / sparkling water",14,"1 glass",250.0,0.0,0.0,0.0,0.0,0.0],["Water",14,"1 glass",250.0,0.0,0.0,0.0,0.0,0.0],["Orange juice",14,"1 glass 250 ml",260.0,45.0,0.7,10.0,0.2,0.2],["Apple juice",14,"1 glass 250 ml",260.0,46.0,0.1,11.0,0.1,0.1],["Black coffee / espresso, double shot",14,"double shot",60.0,8.3,0.5,0.0,0.0,0.0],["Long black",14,"1 regular",240.0,2.1,0.1,0.0,0.0,0.0],["Flat white/latte, full cream",14,"1 regular",240.0,60.0,3.2,4.5,3.3,0.0],["Flat white/latte, skim",14,"1 regular",240.0,33.0,3.3,4.7,0.1,0.0],["Cappuccino, full cream",14,"1 regular",240.0,50.0,2.7,4.0,2.7,0.0],["Iced coffee (e.g. Farmers Union)",14,"1 carton 600 ml",600.0,63.0,3.3,9.0,1.6,0.0],["Tea, black, no milk",14,"1 cup",250.0,0.8,0.0,0.1,0.0,0.0],["Hot chocolate (milk)",14,"1 mug",250.0,80.0,3.5,11.0,3.0,0.5],["Sports drink (e.g. Powerade)",14,"1 bottle 600 ml",600.0,24.0,0.0,6.0,0.0,0.0],["Energy drink (e.g. Red Bull)",14,"1 can 250 ml",250.0,46.0,0.0,11.0,0.0,0.0],["Energy drink, sugar-free",14,"1 can 250 ml",250.0,3.0,0.0,0.5,0.0,0.0],["Kombucha",14,"1 bottle 330 ml",330.0,15.0,0.0,3.5,0.0,0.0],["Coconut water",14,"1 bottle 330 ml",330.0,20.0,0.2,4.5,0.2,0.2],["Protein milk drink (ready to drink)",14,"1 bottle 350 ml",350.0,64.0,6.0,7.0,1.0,0.0],["Chocolate milkshake",14,"1 regular",400.0,110.0,3.5,17.0,3.0,0.3],["Fruit smoothie",14,"1 regular",450.0,55.0,1.0,12.0,0.5,1.0],["Bubble tea, milk tea with pearls",14,"1 regular",500.0,60.0,0.5,12.0,1.2,0.2],["Beer, full strength (schooner 425 ml)",15,"1 schooner",425.0,40.0,0.3,3.0,0.0,0.0],["Beer, full strength (pint 570 ml)",15,"1 pint",570.0,40.0,0.3,3.0,0.0,0.0],["Beer, full strength (stubby 375 ml)",15,"1 stubby",375.0,40.0,0.3,3.0,0.0,0.0],["Beer, mid-strength (schooner)",15,"1 schooner",425.0,30.0,0.3,2.5,0.0,0.0],["Beer, mid-strength (pint)",15,"1 pint",570.0,30.0,0.3,2.5,0.0,0.0],["Beer, light (stubby)",15,"1 stubby",375.0,27.0,0.3,2.5,0.0,0.0],["Beer, low carb (e.g. Pure Blonde, stubby)",15,"1 stubby",355.0,30.0,0.2,0.9,0.0,0.0],["Cider",15,"1 bottle 375 ml",375.0,50.0,0.0,4.5,0.0,0.0],["Wine, red",15,"1 glass 150 ml",150.0,85.0,0.1,2.6,0.0,0.0],["Wine, white",15,"1 glass 150 ml",150.0,82.0,0.1,2.6,0.0,0.0],["Wine, ros\u00e9",15,"1 glass 150 ml",150.0,80.0,0.1,3.8,0.0,0.0],["Sparkling wine/prosecco",15,"1 glass 150 ml",150.0,80.0,0.1,1.5,0.0,0.0],["Spirit nip (vodka/gin/whisky/rum)",15,"1 nip 30 ml",30.0,231.0,0.0,0.0,0.0,0.0],["Vodka/gin + soda water",15,"1 drink",230.0,30.0,0.0,0.0,0.0,0.0],["Spirit + diet mixer (e.g. vodka + Coke Zero)",15,"1 drink",280.0,25.0,0.0,0.0,0.0,0.0],["Gin and tonic (regular tonic)",15,"1 drink",230.0,60.9,0.0,7.8,0.0,0.0],["Rum/bourbon and Coke (regular)",15,"1 drink",280.0,62.5,0.0,9.6,0.0,0.0],["Bourbon and cola premix can",15,"1 can 375 ml",375.0,69.3,0.0,8.0,0.0,0.0],["Vodka Cruiser",15,"1 bottle 275 ml",275.0,72.7,0.0,10.9,0.0,0.0],["Margarita",15,"1 cocktail",200.0,140.0,0.0,12.5,0.0,0.0],["Espresso martini",15,"1 cocktail",120.0,191.7,0.0,15.0,0.0,0.0],["Aperol spritz",15,"1 glass",250.0,68.0,0.0,6.0,0.0,0.0],["Tim Tam",16,"1 biscuit",18.0,510.0,5.0,62.0,26.0,1.5],["Arnott's Shapes",16,"1/4 box",25.0,490.0,8.0,63.0,22.0,2.5],["Potato chips",16,"1 small bag",45.0,535.0,6.5,52.0,33.0,4.0],["Pringles",16,"1 serve",25.0,530.0,5.0,51.0,34.0,3.0],["Corn chips",16,"1 handful",30.0,500.0,7.0,60.0,25.0,5.0],["Popcorn, air-popped",16,"1 cup",8.0,387.0,13.0,78.0,4.5,15.0],["Popcorn, microwave butter",16,"1 cup",10.0,500.0,8.0,55.0,28.0,9.0],["Pretzels",16,"1 handful",30.0,380.0,10.0,80.0,3.0,3.0],["Rice crackers",16,"1 serve",25.0,400.0,7.0,85.0,3.0,1.0],["Rice cakes, plain",16,"1 cake",9.0,387.0,8.0,81.0,2.8,4.0],["Crispbread (Ryvita/Cruskits)",16,"1 crispbread",10.0,360.0,9.0,66.0,2.0,17.0],["Dark chocolate 70%",16,"4 squares",20.0,600.0,8.0,46.0,43.0,11.0],["Milk chocolate (e.g. Dairy Milk)",16,"4 squares",25.0,535.0,7.3,57.0,30.0,2.0],["Muesli bar",16,"1 bar",30.0,430.0,7.0,62.0,15.0,5.0],["Jelly lollies (snakes etc.)",16,"5 lollies",30.0,340.0,4.0,82.0,0.3,0.0],["Doughnut, glazed",16,"1 doughnut",60.0,420.0,6.0,48.0,23.0,1.5],["Blueberry muffin",16,"1 muffin",130.0,360.0,5.0,50.0,16.0,1.5],["Banana bread",16,"1 slice",120.0,330.0,5.0,48.0,13.0,2.0],["Choc chip cookie",16,"1 cookie",30.0,480.0,5.0,64.0,23.0,2.0],["Brownie",16,"1 piece",70.0,440.0,5.0,55.0,22.0,2.5],["Cheesecake",16,"1 slice",120.0,320.0,6.0,25.0,22.0,0.5],["Paddle Pop / ice block (dairy)",16,"1 stick",75.0,150.0,2.5,22.0,6.0,0.0],["Lamington",16,"1 lamington",60.0,370.0,4.0,55.0,15.0,2.0],["Anzac biscuit",16,"1 biscuit",20.0,470.0,5.0,65.0,21.0,3.0],["Scone with jam & cream",16,"1 scone",100.0,340.0,6.0,45.0,15.0,1.5]]};
@@ -255,13 +291,14 @@ var DEFAULT_FOODS=[
  ['Coke Zero','1 can',0,0,0,0,0,375],
  ['Black coffee','double shot',5,0.3,0,0,0,60]
 ];
+var STARTER={'Large egg':1,'Egg white':1,'Chicken breast, cooked':1,'Extra virgin olive oil':1,'Broccoli':1,'Psyllium husk':1,'Coke Zero':1,'Black coffee':1};
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function defaults(){
-  return {version:2,
-    settings:{kcal:1500,kcalMin:1400,kcalMax:1600,protein:120,pMin:110,pMax:130,carbs:120,fat:50,fibre:30,waterL:3,bodyKg:107},
-    foods:DEFAULT_FOODS.map(function(f){var o={id:uid(),name:f[0],amount:f[1],kcal:f[2],p:f[3],c:f[4],f:f[5],fib:f[6]};if(f[7])o.g=f[7];return o;}),
+  return {version:3,profile:null,
+    settings:{kcal:1500,kcalMin:1400,kcalMax:1600,protein:120,pMin:110,pMax:130,carbs:120,fat:50,fibre:30,waterL:3},
+    foods:DEFAULT_FOODS.filter(function(f){return STARTER[f[0]];}).map(function(f){var o={id:uid(),name:f[0],amount:f[1],kcal:f[2],p:f[3],c:f[4],f:f[5],fib:f[6]};if(f[7])o.g=f[7];return o;}),
     log:{},exercise:{},water:{},
-    weights:[{date:'2026-10-29',kg:108.0},{date:'2026-11-02',kg:107.4}]};
+    weights:[]};
 }
 var S;
 function load(){
@@ -274,9 +311,12 @@ function load(){
   S.settings=Object.assign({},d.settings,S.settings||{});
   // migrate v1 saved foods: add fibre for known defaults
   S.foods.forEach(function(f){if(f.fib===undefined){var m=DEFAULT_FOODS.find(function(x){return x[0]===f.name;});f.fib=m?m[6]:0;}});
-  S.version=2;
+  if(S.profile===undefined)S.profile=null;
+  if(S.settings.bodyKg!==undefined){S.legacyBodyKg=S.settings.bodyKg;delete S.settings.bodyKg;}
+  S.version=3;
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('Could not save: storage full or blocked');}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('Could not save: storage full or blocked');}}
+function save(){trackChanges(true);persist();scheduleSync();}
 
 // ---- dates
 function pad(n){return (n<10?'0':'')+n;}
@@ -307,7 +347,8 @@ function totals(d){
   ['kcal','p','c','f','fib'].forEach(function(k){t[k]=r1(t[k]);});
   return t;
 }
-function estKcal(type,min){return r0((EX_TYPES[type]||4)*num(S.settings.bodyKg)*num(min)/60);}
+function bodyKgNow(){var w=sortedW();if(w.length)return w[w.length-1].kg;if(S.profile&&S.profile.startKg>0)return S.profile.startKg;return S.legacyBodyKg||80;}
+function estKcal(type,min){return r0((EX_TYPES[type]||4)*bodyKgNow()*num(min)/60);}
 
 // ---- search (fuzzy)
 var STOP={'of':1,'with':1,'a':1,'an':1,'the':1,'and':1,'some':1,'g':1,'gram':1,'grams':1,'x':1,'serve':1,'serves':1,'serving':1,'servings':1,'cup':1,'cups':1,'piece':1,'pieces':1,'slice':1,'slices':1,'ml':1,'my':1,'had':1,'ate':1};
@@ -410,7 +451,7 @@ function renderEx(){
   }).join(''):'<p class="mut">No exercise logged.</p>';
   updEst();
 }
-function updEst(){var m=num($('exMinIn').value);$('exEst').textContent=m?'Estimate: ~'+estKcal($('exType').value,m)+' kcal (MET × '+S.settings.bodyKg+' kg)':'';}
+function updEst(){var m=num($('exMinIn').value);$('exEst').textContent=m?'Estimate: ~'+estKcal($('exType').value,m)+' kcal (MET × '+r1(bodyKgNow())+' kg)':'';}
 function sortedW(){return S.weights.slice().sort(function(a,b){return a.date<b.date?-1:1;});}
 function avg7(w,i){var end=parse(w[i].date),s=0,n=0;for(var j=i;j>=0;j--){if((end-parse(w[j].date))/864e5>6)break;s+=w[j].kg;n++;}return s/n;}
 function renderWeight(){
@@ -447,7 +488,7 @@ function drawChart(w){
     w.forEach(function(p,i){var x=X(p.date),y=Y(avg7(w,i));i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();if(ctx.setLineDash)ctx.setLineDash([]);}
 }
 function cls(v,lo,hi){if(v>=lo&&v<=hi)return 'g';var m=(hi-lo)/2||50;return (v>=lo-m&&v<=hi+m)?'y':'r';}
-var TMAP={tKcalMin:'kcalMin',tKcalMax:'kcalMax',tKcal:'kcal',tWater:'waterL',tPMin:'pMin',tPMax:'pMax',tP:'protein',tBW:'bodyKg',tC:'carbs',tF:'fat',tFib:'fibre'};
+var TMAP={tKcalMin:'kcalMin',tKcalMax:'kcalMax',tKcal:'kcal',tWater:'waterL',tPMin:'pMin',tPMax:'pMax',tP:'protein',tC:'carbs',tF:'fat',tFib:'fibre'};
 function renderMore(){
   var s=S.settings,h='';
   for(var i=0;i<30;i++){var d=addDays(TODAY,-i),t=totals(d);
@@ -455,14 +496,16 @@ function renderMore(){
     h+='<tr><td>'+short(d)+'</td><td class="'+cls(t.kcal,s.kcalMin,s.kcalMax)+'">'+r0(t.kcal)+'</td><td class="'+cls(t.p,s.pMin,s.pMax+1000)+'">'+r0(t.p)+'</td><td class="'+(t.fib>=s.fibre?'g':t.fib>=s.fibre*0.6?'y':'r')+'">'+r0(t.fib)+'</td><td class="'+(t.exMin>=20?'g':t.exMin>0?'y':'mut')+'">'+r0(t.exMin)+'</td></tr>';}
   $('histBody').innerHTML=h;
   Object.keys(TMAP).forEach(function(k){$(k).value=s[TMAP[k]];});
+  renderProfile();renderAccount();
 }
 var tab='today';
 function render(){
   $('dayTitle').textContent=nice(cur);
   var showNav=(tab==='today'||tab==='food'||tab==='exercise');
   $('prevDay').style.visibility=$('nextDay').style.visibility=showNav?'visible':'hidden';
-  if(!showNav)$('dayTitle').textContent=tab==='weight'?'Weight':'History & settings';
-  if(tab==='today')renderToday();else if(tab==='food')renderFood();else if(tab==='exercise')renderEx();else if(tab==='weight')renderWeight();else renderMore();
+  if(!showNav)$('dayTitle').textContent=tab==='weight'?'Weight':tab==='summary'?'Summary':'History & settings';
+  $('setupBanner').hidden=!!S.profile;
+  if(tab==='today')renderToday();else if(tab==='food')renderFood();else if(tab==='exercise')renderEx();else if(tab==='weight')renderWeight();else if(tab==='summary')renderSummary();else renderMore();
 }
 function go(t){tab=t;document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('on',p.id==='p-'+t);});
   document.querySelectorAll('#tabs button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===t);});window.scrollTo(0,0);render();}
@@ -605,7 +648,8 @@ function openOnline(q,scan){$('offQ').value=q||'';$('offStatus').textContent='';
 // ---- Send to Steve
 function buildSummary(d){
   var s=S.settings,t=totals(d),L=[];
-  L.push('Food log for '+longDate(d)+' ('+d+')');L.push('');
+  var nm=S.profile&&S.profile.name?S.profile.name:'';
+  L.push((nm?nm+"'s food log for ":'Food log for ')+longDate(d)+' ('+d+')');L.push('');
   var list=dayFood(d);
   if(!list.length)L.push('No food logged.');
   MEALS.forEach(function(m){var items=list.filter(function(e){return e.meal===m;});if(!items.length)return;
@@ -639,6 +683,377 @@ function toCSV(){
   Object.keys(S.water).sort().forEach(function(d){rows.push(['water_ml',d,'','',S.water[d],'','','','','','']);});
   sortedW().forEach(function(w){rows.push(['weight_kg',w.date,'','',w.kg,'','','','','','']);});
   return rows.map(function(r){return r.map(csvCell).join(',');}).join('\n');
+}
+
+// ======== Profile / first-run setup ========
+var setupSkipped=false;
+function hasLocalData(){return Object.keys(S.log).length>0||Object.keys(S.exercise).length>0||S.weights.length>0;}
+function openSetup(edit){
+  var p=S.profile||{},s=S.settings,w=sortedW();
+  $('suTitle').textContent=edit?'Edit profile':'Welcome! Quick setup';
+  $('suIntro').textContent=edit?'Changing kcal or protein here also re-centres your target ranges.':'This sets your targets. Everything is saved on this phone.';
+  $('suName').value=p.name||'';$('suSex').value=p.sex||'';$('suCm').value=p.heightCm||'';
+  $('suKg').value=p.startKg||(w.length?w[w.length-1].kg:'');$('suGoal').value=p.goalKg||'';
+  $('suKcal').value=s.kcal||1500;$('suP').value=s.protein||120;
+  var ex=$('suExisting');
+  if(!edit&&hasLocalData()&&!(S.sync&&S.sync.owner)){
+    var nd=Object.keys(S.log).length;
+    ex.innerHTML='This phone already has data: '+nd+' day'+(nd===1?'':'s')+' of food and '+S.weights.length+' weigh-in'+(S.weights.length===1?'':'s')+'. It will be kept.'+
+      '<label style="margin-top:6px"><input type="checkbox" id="suWipe" style="width:auto;min-height:0"> Start blank instead (delete it)</label>';
+    ex.hidden=false;
+  }else{ex.hidden=true;ex.innerHTML='';}
+  $('suSignIn').hidden=!(cloudOn()&&!cUser&&!edit);
+  $('suLater').textContent=edit?'Cancel':'Later';
+  showDlg('dlgSetup');
+}
+function saveSetup(){
+  var name=$('suName').value.trim(),kg=num($('suKg').value);
+  if(!name){toast('Enter a name');return false;}
+  if(!(kg>20&&kg<400)){toast('Enter your current weight in kg');return false;}
+  var wipe=$('suWipe')&&$('suWipe').checked,first=!S.profile;
+  if(wipe){if(!confirm('Delete the existing data on this phone?'))return false;var sy=S.sync;S=defaults();S.sync=sy;}
+  var kcal=num($('suKcal').value)||1500,prot=num($('suP').value)||120,s=S.settings;
+  if(first||kcal!==s.kcal){s.kcal=kcal;s.kcalMin=kcal-100;s.kcalMax=kcal+100;}
+  if(first||prot!==s.protein){s.protein=prot;s.pMin=Math.max(0,prot-10);s.pMax=prot+10;}
+  var cm=num($('suCm').value),goal=num($('suGoal').value);
+  S.profile=Object.assign({},S.profile||{},{name:name,sex:$('suSex').value,startKg:r1(kg),heightCm:cm>0?cm:null,goalKg:goal>0?r1(goal):null,created:(S.profile&&S.profile.created)||TODAY});
+  if(!S.weights.length)S.weights.push({date:TODAY,kg:r1(kg)});
+  save();hideDlg('dlgSetup');render();toast(first?'All set, '+name+'!':'Profile saved');return true;
+}
+function ensureSetup(){if(!S.profile&&!setupSkipped)openSetup(false);}
+function renderProfile(){
+  var p=S.profile;
+  if(!p){$('profBox').innerHTML='<p class="mut">Not set up yet.</p>';$('btnEditProfile').textContent='Set up profile';return;}
+  $('btnEditProfile').textContent='Edit profile';
+  $('profBox').innerHTML='<div class="kv"><span>Name</span><b>'+esc(p.name)+'</b></div>'+(p.sex?'<div class="kv"><span>Sex</span><span>'+esc(p.sex)+'</span></div>':'')+
+    (p.heightCm?'<div class="kv"><span>Height</span><span>'+r1(p.heightCm)+' cm</span></div>':'')+
+    '<div class="kv"><span>Starting weight</span><span>'+r1(p.startKg)+' kg</span></div>'+
+    '<div class="kv"><span>Goal weight</span><span>'+(p.goalKg?r1(p.goalKg)+' kg':'not set')+'</span></div>'+
+    '<div class="kv"><span>Exercise estimates use</span><span>'+r1(bodyKgNow())+' kg</span></div>';
+}
+function resetEverything(){
+  var signed=!!(cUser&&S.sync&&S.sync.owner);
+  var msg=signed?'Reset everything? This deletes ALL your food, exercise, weigh-ins, saved foods and profile on this phone AND in your online account. Export a backup first if unsure.':
+    'Reset everything? This deletes ALL food, exercise, weigh-ins, saved foods and your profile on this phone. Export a backup first if unsure.';
+  if(!confirm(msg))return;
+  if(!confirm('Are you sure? This cannot be undone.'))return;
+  var sy=S.sync;S=defaults();if(signed)S.sync=sy;
+  save();cur=TODAY;setupSkipped=false;go('today');toast('Everything reset');ensureSetup();
+}
+
+// ======== Stats (shared by own + partner) ========
+function sortW(arr){var m={};(arr||[]).forEach(function(w){if(w&&w.date&&num(w.kg)>0)m[w.date]=num(w.kg);});return Object.keys(m).sort().map(function(d){return {date:d,kg:m[d]};});}
+function ownDaily(){
+  var m={};
+  Object.keys(S.log).forEach(function(d){if(dayFood(d).length){var t=totals(d);m[d]={kcal:t.kcal,p:t.p,exMin:t.exMin,exKcal:t.exKcal,logged:true};}});
+  Object.keys(S.exercise).forEach(function(d){if(!m[d]&&dayEx(d).length){var t=totals(d);m[d]={kcal:0,p:0,exMin:t.exMin,exKcal:t.exKcal,logged:false};}});
+  return m;
+}
+function dayDiff(a,b){return Math.round((parse(b)-parse(a))/864e5);}
+function linFit(w){
+  if(w.length<2)return null;var x0=w[0].date,n=w.length,sx=0,sy=0,sxx=0,sxy=0;
+  w.forEach(function(p){var x=dayDiff(x0,p.date);sx+=x;sy+=p.kg;sxx+=x*x;sxy+=x*p.kg;});
+  var den=n*sxx-sx*sx;if(!den)return null;var b=(n*sxy-sx*sy)/den;return {a:(sy-b*sx)/n,b:b,x0:x0};
+}
+function weekStart(d){var x=parse(d);x.setDate(x.getDate()-((x.getDay()+6)%7));return iso(x);}
+function computeStats(src){
+  var today=src.today||TODAY,s=src.settings||{},daily=src.daily||{},goal=num(src.goalKg)||null,o={};
+  var logged=Object.keys(daily).filter(function(d){return daily[d].logged&&d<=today;}).sort();
+  o.daysLogged=logged.length;o.firstDay=logged[0]||null;
+  function win(n){var k=0,p=0,c=0,em=0,ek=0;for(var i=1;i<=n;i++){var t=daily[addDays(today,-i)];if(!t)continue;if(t.logged){k+=num(t.kcal);p+=num(t.p);c++;}em+=num(t.exMin);ek+=num(t.exKcal);}
+    return {days:n,n:c,kcal:c?k/c:null,p:c?p/c:null,exMinDay:em/n,exKcalDay:ek/n,exMinWeek:em/n*7};}
+  o.w7=win(7);o.w30=win(30);
+  var done=logged.filter(function(d){return d<today;}),kOk=0,pOk=0;
+  done.forEach(function(d){var t=daily[d];if(t.kcal>=num(s.kcalMin)&&t.kcal<=num(s.kcalMax))kOk++;if(t.p>=num(s.pMin))pOk++;});
+  o.adh={days:done.length,kcalPct:done.length?kOk/done.length*100:null,protPct:done.length?pOk/done.length*100:null,kcalDays:kOk,protDays:pOk};
+  var set={};logged.forEach(function(d){set[d]=1;});
+  var cs=0,d=set[today]?today:addDays(today,-1);while(set[d]){cs++;d=addDays(d,-1);}
+  var best=0,run=0,prev=null;logged.forEach(function(x){run=(prev&&addDays(prev,1)===x)?run+1:1;if(run>best)best=run;prev=x;});
+  o.streak={current:cs,best:best,loggedToday:!!set[today]};
+  var weeks=[],ws0=weekStart(today);
+  for(var i=7;i>=0;i--){var ws=addDays(ws0,-7*i),sk=0,sn=0;for(var j=0;j<7;j++){var dd=addDays(ws,j);if(dd>=today)break;var t=daily[dd];if(t&&t.logged){sk+=num(t.kcal);sn++;}}
+    weeks.push({start:ws,n:sn,kcal:sn?sk/sn:null});}
+  o.weeks=weeks;
+  var w=sortW(src.weights),W={n:w.length,list:w,goal:goal};
+  if(w.length){
+    W.latest=w[w.length-1];W.first=w[0];W.total=W.latest.kg-W.first.kg;W.span=dayDiff(W.first.date,W.latest.date);
+    W.rolling=w.map(function(p,i){return avg7(w,i);});W.avg7=W.rolling[W.rolling.length-1];
+    var fit=linFit(w);W.fit=fit;
+    var enough=w.length>=2&&W.span>=3&&fit;
+    W.weekly=enough?fit.b*7:null;
+    if(!goal)W.proj={status:'nogoal'};
+    else if(!enough)W.proj={status:'need'};
+    else{
+      var dir=goal<W.first.kg?-1:1,fitNow=fit.a+fit.b*W.span;
+      if((W.latest.kg-goal)*dir>=0)W.proj={status:'reached'};
+      else if(fit.b*dir>0.0005){
+        var days=Math.ceil((goal-fitNow)/fit.b);
+        W.proj=days>3*365?{status:'far',days:days}:{status:'ok',days:days,date:addDays(W.latest.date,Math.max(days,1))};
+      }else W.proj={status:'away'};
+    }
+  }
+  o.weight=W;
+  return o;
+}
+
+// ======== SVG charts ========
+function svgWeight(W,opts){
+  opts=opts||{};var w=W.list,VW=340,VH=opts.h||200,L=36,R=8,T=10,B=22;
+  if(!w.length)return '<p class="mut">Add weigh-ins (Weight tab) to see your trend.</p>';
+  var x0=w[0].date,span=Math.max(1,dayDiff(x0,w[w.length-1].date));
+  var mn=Infinity,mx=-Infinity;w.forEach(function(p){mn=Math.min(mn,p.kg);mx=Math.max(mx,p.kg);});
+  if(W.goal&&W.goal>mn-3&&W.goal<mx+3){mn=Math.min(mn,W.goal);mx=Math.max(mx,W.goal);}
+  mn=Math.floor(mn-0.5);mx=Math.ceil(mx+0.5);if(mx-mn<2)mx=mn+2;
+  function X(d){return L+dayDiff(x0,d)/span*(VW-L-R);}function Y(k){return T+(mx-k)/(mx-mn)*(VH-T-B);}
+  var g='<svg viewBox="0 0 '+VW+' '+VH+'" class="chart" role="img" aria-label="Weight chart">';
+  for(var i=0;i<=4;i++){var k=mn+(mx-mn)*i/4,y=Y(k).toFixed(1);g+='<line x1="'+L+'" x2="'+(VW-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--card2)"/><text x="2" y="'+(+y+4)+'" font-size="10" fill="var(--mut)">'+k.toFixed(1)+'</text>';}
+  g+='<text x="'+L+'" y="'+(VH-6)+'" font-size="10" fill="var(--mut)">'+short(w[0].date)+'</text><text x="'+(VW-R)+'" y="'+(VH-6)+'" font-size="10" fill="var(--mut)" text-anchor="end">'+short(w[w.length-1].date)+'</text>';
+  if(W.goal&&W.goal>=mn&&W.goal<=mx){var gy=Y(W.goal).toFixed(1);g+='<line x1="'+L+'" x2="'+(VW-R)+'" y1="'+gy+'" y2="'+gy+'" stroke="var(--good)" stroke-opacity=".45" stroke-dasharray="2 3"/><text x="'+(VW-R)+'" y="'+(gy-3)+'" font-size="10" fill="var(--good)" text-anchor="end">goal '+r1(W.goal)+'</text>';}
+  var pts=w.map(function(p){return X(p.date).toFixed(1)+','+Y(p.kg).toFixed(1);}).join(' ');
+  if(w.length>1)g+='<polyline points="'+pts+'" fill="none" stroke="var(--acc)" stroke-width="2"/>';
+  if(W.fit&&w.length>1){var f=W.fit,xe=dayDiff(x0,w[w.length-1].date);g+='<line class="trend" x1="'+X(x0).toFixed(1)+'" y1="'+Y(f.a).toFixed(1)+'" x2="'+X(w[w.length-1].date).toFixed(1)+'" y2="'+Y(f.a+f.b*xe).toFixed(1)+'" stroke="var(--f)" stroke-width="2" stroke-dasharray="6 4"/>';}
+  if(w.length>1&&W.rolling)g+='<polyline class="roll" points="'+w.map(function(p,i){return X(p.date).toFixed(1)+','+Y(W.rolling[i]).toFixed(1);}).join(' ')+'" fill="none" stroke="var(--good)" stroke-width="2" stroke-dasharray="4 3"/>';
+  w.forEach(function(p){g+='<circle cx="'+X(p.date).toFixed(1)+'" cy="'+Y(p.kg).toFixed(1)+'" r="3" fill="var(--acc)"/>';});
+  return g+'</svg>';
+}
+function svgWeekly(weeks,target){
+  var VW=340,VH=170,L=34,R=6,T=12,B=22,mx=num(target)*1.3;
+  weeks.forEach(function(x){if(x.kcal)mx=Math.max(mx,x.kcal*1.05);});mx=Math.ceil(mx/250)*250||2000;
+  function Y(k){return T+(mx-k)/mx*(VH-T-B);}
+  var bw=(VW-L-R)/weeks.length,g='<svg viewBox="0 0 '+VW+' '+VH+'" class="chart" role="img" aria-label="Weekly calories">';
+  [0,mx/2,mx].forEach(function(k){var y=Y(k).toFixed(1);g+='<line x1="'+L+'" x2="'+(VW-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--card2)"/><text x="2" y="'+(+y+4)+'" font-size="10" fill="var(--mut)">'+r0(k)+'</text>';});
+  weeks.forEach(function(x,i){var bx=L+i*bw+bw*0.15,w=bw*0.7;
+    if(x.kcal){var y=Y(x.kcal),col=x.kcal>target*1.07?'var(--bad)':x.kcal<target*0.8?'var(--warn)':'var(--acc)';
+      g+='<rect class="wbar" x="'+bx.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(Y(0)-y).toFixed(1)+'" rx="3" fill="'+col+'"><title>Week of '+short(x.start)+': '+r0(x.kcal)+' kcal avg ('+x.n+' days)</title></rect>';
+      g+='<text x="'+(bx+w/2).toFixed(1)+'" y="'+(y-3).toFixed(1)+'" font-size="9" fill="var(--mut)" text-anchor="middle">'+r0(x.kcal)+'</text>';}
+    if(i%2===weeks.length%2||i===weeks.length-1)g+='<text x="'+(bx+w/2).toFixed(1)+'" y="'+(VH-6)+'" font-size="9" fill="var(--mut)" text-anchor="middle">'+short(x.start)+'</text>';});
+  var ty=Y(target).toFixed(1);g+='<line x1="'+L+'" x2="'+(VW-R)+'" y1="'+ty+'" y2="'+ty+'" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="5 3"/><text x="2" y="'+(+ty+13)+'" font-size="9" fill="var(--good)">target</text>';
+  return g+'</svg>';
+}
+
+// ======== Summary tab ========
+function fmtK(v){return v==null?'–':r0(v);}
+function sgn(v,d){return v==null?'–':(v>0?'+':'')+v.toFixed(d==null?1:d);}
+function projText(W,who){
+  var p=W.proj||{};
+  if(!W.n)return 'Need more weigh-ins to project a goal date.';
+  if(p.status==='nogoal')return 'Set a goal weight in your profile to see a projected date.';
+  if(p.status==='need')return 'Need more weigh-ins (at least 2, spanning 3+ days) to project when you\'ll reach '+r1(W.goal)+' kg.';
+  if(p.status==='reached')return '🎉 Goal of '+r1(W.goal)+' kg reached!';
+  if(p.status==='away')return 'Not trending toward the goal of '+r1(W.goal)+' kg yet, so no projected date.';
+  if(p.status==='far')return 'At the current rate, '+r1(W.goal)+' kg is more than 3 years away.';
+  return 'At the current trend ('+sgn(W.weekly,2)+' kg/week), '+(who||'you')+' would reach <b>'+r1(W.goal)+' kg around '+longDate(p.date)+'</b> (~'+Math.round(p.days/7)+' weeks).';
+}
+function avgRow(lbl,a){return '<tr><td>'+lbl+'</td><td>'+fmtK(a.kcal)+'</td><td>'+fmtK(a.p)+'</td><td>'+r0(a.exMinDay)+'</td><td>'+a.n+'/'+a.days+'</td></tr>';}
+function renderSummary(){
+  var s=S.settings,st=computeStats({daily:ownDaily(),weights:S.weights,settings:s,goalKg:S.profile&&S.profile.goalKg}),W=st.weight;
+  $('sumEmpty').hidden=!(st.daysLogged===0&&W.n===0);
+  $('sumAvg').innerHTML=(st.w7.n||st.w30.n)?'<table><thead><tr><th></th><th>kcal</th><th>Protein g</th><th>Ex min/day</th><th>Days logged</th></tr></thead><tbody>'+avgRow('Last 7 days',st.w7)+avgRow('Last 30 days',st.w30)+'</tbody></table>'+
+    '<p class="mut">Averages use completed days you logged food (today is left out until it\'s over). '+st.daysLogged+' day'+(st.daysLogged===1?'':'s')+' logged in total. Exercise averages '+r0(st.w7.exMinWeek)+' min a week lately.</p>':
+    '<p class="mut">Averages start after your first full logged day'+(st.streak.loggedToday?' (today counts from tomorrow).':'.')+'</p>';
+  $('sumWChart').innerHTML=svgWeight(W);
+  $('sumWStats').innerHTML=W.n?'<div class="stat"><b>'+W.latest.kg.toFixed(1)+'</b><span class="mut">latest kg</span></div>'+
+    '<div class="stat"><b class="'+(W.weekly==null?'':W.weekly<=0?'g':'r')+'">'+sgn(W.weekly,2)+'</b><span class="mut">kg / week (trend)</span></div>'+
+    '<div class="stat"><b class="'+(W.total<=0?'g':'r')+'">'+sgn(W.total)+'</b><span class="mut">kg since '+short(W.first.date)+'</span></div>':'';
+  $('sumProj').innerHTML=projText(W);
+  var a=st.adh;
+  $('sumAdh').innerHTML=(a.days?'<div class="grid2"><div class="stat"><b>'+r0(a.kcalPct)+'%</b><span class="mut">days within '+s.kcalMin+'–'+s.kcalMax+' kcal ('+a.kcalDays+'/'+a.days+')</span></div>'+
+    '<div class="stat"><b>'+r0(a.protPct)+'%</b><span class="mut">days with '+s.pMin+' g+ protein ('+a.protDays+'/'+a.days+')</span></div></div>':'<p class="mut">Adherence shows once you have a completed logged day.</p>')+
+    '<div class="grid2" style="margin-top:10px"><div class="stat"><b>'+st.streak.current+'🔥</b><span class="mut">current logging streak (days)</span></div><div class="stat"><b>'+st.streak.best+'</b><span class="mut">best streak</span></div></div>';
+  $('sumWeekly').innerHTML=st.weeks.some(function(x){return x.kcal;})?svgWeekly(st.weeks,s.kcal)+'<p class="mut">Average kcal per logged day, by week (Mon–Sun), last 8 weeks.</p>':'<p class="mut">Weekly bars appear once you\'ve logged a full day.</p>';
+  renderPartnerSummary(st);
+}
+function renderPartnerSummary(mine){
+  var card=$('partnerCard');
+  if(!cloudOn()){card.hidden=true;return;}
+  card.hidden=false;var box=$('partnerBox');
+  if(!cUser){box.innerHTML='<p class="mut">Sign in under More → Account to link with your partner and see each other\'s progress.</p>';return;}
+  if(!partner){box.innerHTML='<p class="mut">'+(partnerErr?esc(partnerErr):'No partner linked yet. Add one under More → Account &amp; partner.')+'</p>';return;}
+  var P=partner,pp=P.profile||{},pn=pp.name||P.email||'Partner',me=(S.profile&&S.profile.name)||'Me';
+  var ps=computeStats({daily:P.daily,weights:P.weights,settings:pp.settings||{},goalKg:pp.goalKg}),PW=ps.weight,MW=mine.weight;
+  function wk(W){return W.n?W.latest.kg.toFixed(1)+' kg':'–';}
+  function row(l,a,b){return '<tr><td>'+l+'</td><td>'+a+'</td><td>'+b+'</td></tr>';}
+  function pj(W){var p=W.proj||{};return p.status==='ok'?short(p.date):p.status==='reached'?'reached':p.status==='need'?'need data':'–';}
+  box.innerHTML='<p class="mut" style="margin-top:0">'+esc(pn)+' · last updated '+(P.updated?new Date(P.updated).toLocaleString('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'never')+'</p>'+
+    svgWeight(PW,{h:170})+'<p class="hint">'+projText(PW,esc(pn))+'</p>'+
+    '<table class="cmp"><thead><tr><th></th><th>'+esc(me)+'</th><th>'+esc(pn)+'</th></tr></thead><tbody>'+
+    row('Latest weight',wk(MW),wk(PW))+row('Trend kg/week',sgn(MW.weekly,2),sgn(PW.weekly,2))+row('Change since start',MW.n?sgn(MW.total)+' kg':'–',PW.n?sgn(PW.total)+' kg':'–')+
+    row('Goal',(S.profile&&S.profile.goalKg?r1(S.profile.goalKg)+' kg':'–'),(pp.goalKg?r1(pp.goalKg)+' kg':'–'))+row('Projected goal date',pj(MW),pj(PW))+
+    row('7-day avg kcal',fmtK(mine.w7.kcal),fmtK(ps.w7.kcal))+row('7-day avg protein',fmtK(mine.w7.p)+' g',fmtK(ps.w7.p)+' g')+
+    row('Exercise min/day (7d)',r0(mine.w7.exMinDay),r0(ps.w7.exMinDay))+row('kcal adherence',mine.adh.days?r0(mine.adh.kcalPct)+'%':'–',ps.adh.days?r0(ps.adh.kcalPct)+'%':'–')+
+    row('Logging streak',mine.streak.current+' d',ps.streak.current+' d')+'</tbody></table>'+
+    '<p class="mut">You can see each other\'s weigh-ins, daily totals and goals only. Food details stay private.</p>';
+}
+
+// ======== Cloud (Supabase) — only active when CLOUD_CFG is filled in ========
+var SB_CDN='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+var PKEY='kymTracker.partner.v1';
+var sb=null,cUser=null,cloudErr='',syncErr='',syncing=false,syncTimer=null,partner=null,partnerErr='',links=[],acctMsg='';
+var TABLES=['profiles','food_entries','exercise_entries','water_logs','weigh_ins','my_foods'];
+var PK={food_entries:'id',exercise_entries:'id',my_foods:'id',water_logs:'date',weigh_ins:'date',profiles:'user_id'};
+var CONFLICT={food_entries:'user_id,id',exercise_entries:'user_id,id',my_foods:'user_id,id',water_logs:'user_id,date',weigh_ins:'user_id,date',profiles:'user_id'};
+function cloudOn(){return /^https:\/\/[^\/]+/.test(CLOUD_CFG.url)&&CLOUD_CFG.anonKey.length>20&&CLOUD_CFG.anonKey.indexOf('/*')<0;}
+function loadSb(){return new Promise(function(res,rej){if(window.supabase&&window.supabase.createClient)return res();
+  var s=document.createElement('script');s.src=SB_CDN;s.onload=function(){window.supabase?res():rej(new Error('Sign-in library failed to load'));};s.onerror=function(){rej(new Error('Offline: can\'t reach the sign-in service right now. Your data is still saved on this phone.'));};document.head.appendChild(s);});}
+function cloudInit(){
+  if(!cloudOn())return Promise.resolve();
+  try{var pc=JSON.parse(localStorage.getItem(PKEY)||'null');if(pc&&S.sync&&pc.owner===S.sync.owner)partner=pc;}catch(e){}
+  return loadSb().then(function(){
+    sb=window.supabase.createClient(CLOUD_CFG.url,CLOUD_CFG.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'tracker.auth'}});
+    sb.auth.onAuthStateChange(function(ev,session){var u=session&&session.user||null,ch=(u&&u.id)!==(cUser&&cUser.id);cUser=u;if(ch){if(u)setTimeout(onSignedIn,0);else{partner=null;renderAccount();if(tab==='summary')renderSummary();}}});
+    return sb.auth.getSession().then(function(r){var u=r&&r.data&&r.data.session&&r.data.session.user;if(u&&(!cUser||cUser.id!==u.id)){cUser=u;onSignedIn();}renderAccount();});
+  }).catch(function(e){cloudErr=e.message||String(e);renderAccount();});
+}
+function hash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36);}
+function localRecords(){
+  var m={};
+  Object.keys(S.log).forEach(function(d){dayFood(d).forEach(function(e){m['food_entries|'+e.id]={id:e.id,date:d,meal:e.meal||'',name:e.name||'',amount:e.amount||'',kcal:num(e.kcal),p:num(e.p),c:num(e.c),f:num(e.f),fib:num(e.fib)};});});
+  Object.keys(S.exercise).forEach(function(d){dayEx(d).forEach(function(e){m['exercise_entries|'+e.id]={id:e.id,date:d,type:e.type||'',minutes:num(e.min),kcal:num(e.kcal),est:!!e.est,notes:e.notes||''};});});
+  Object.keys(S.water).forEach(function(d){m['water_logs|'+d]={date:d,ml:num(S.water[d])};});
+  S.weights.forEach(function(w){m['weigh_ins|'+w.date]={date:w.date,kg:num(w.kg)};});
+  S.foods.forEach(function(f){m['my_foods|'+f.id]={id:f.id,name:f.name||'',amount:f.amount||'',g:f.g||null,kcal:num(f.kcal),p:num(f.p),c:num(f.c),f:num(f.f),fib:num(f.fib)};});
+  if(S.profile){var p=S.profile;m['profiles|me']={name:p.name||'',sex:p.sex||'',start_kg:p.startKg||null,height_cm:p.heightCm||null,goal_kg:p.goalKg||null,settings:S.settings};}
+  return m;
+}
+function trackChanges(mark){
+  var sy=S.sync;if(!sy||!sy.owner)return;
+  var m=localRecords(),fp={},old=sy.fp||{},dirty=sy.dirty||(sy.dirty={});
+  Object.keys(m).forEach(function(k){fp[k]=hash(JSON.stringify(m[k]));if(mark&&old[k]!==fp[k])dirty[k]=1;});
+  if(mark)Object.keys(old).forEach(function(k){if(!(k in fp))dirty[k]=1;});
+  sy.fp=fp;
+}
+function scheduleSync(){if(!sb||!cUser)return;clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,2000);}
+function onSignedIn(){
+  if(!cUser)return;var uid=cUser.id;S.sync=S.sync||{};
+  if(S.sync.owner&&S.sync.owner!==uid){
+    if(!confirm('This phone has data from a different account. Clear it and load '+(cUser.email||'your account')+'?')){sb.auth.signOut();return;}
+    S=defaults();S.sync={};partner=null;localStorage.removeItem(PKEY);
+  }
+  if(!S.sync.owner){
+    S.sync={owner:uid,dirty:{},fp:{},lastPull:{}};
+    trackChanges(false);
+    if(hasLocalData()||S.profile){
+      if(confirm('Upload the data already on this phone to your account?\n\nOK = upload it.\nCancel = don\'t upload.'))Object.keys(S.sync.fp).forEach(function(k){S.sync.dirty[k]=1;});
+      else if(confirm('Discard this phone\'s data and use only your account\'s data?\n\nOK = discard it.\nCancel = keep it on this phone (not uploaded unless you change it).')){S=defaults();S.sync={owner:uid,dirty:{},fp:{},lastPull:{}};}
+    }
+    persist();
+  }
+  acctMsg='';renderAccount();syncNow().then(function(){if(!S.profile){setupSkipped=false;ensureSetup();}else hideDlg('dlgSetup');});
+}
+function chunk(a,n){var o=[];for(var i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o;}
+function seq(fns){return fns.reduce(function(p,f){return p.then(f);},Promise.resolve());}
+function chk(r){if(r&&r.error)throw r.error;return r;}
+function pushDirty(){
+  var sy=S.sync,keys=Object.keys(sy.dirty||{});if(!keys.length)return Promise.resolve();
+  var m=localRecords(),snap=Object.assign({},sy.fp),ups={},jobs=[],uid=cUser.id;
+  keys.forEach(function(k){var i=k.indexOf('|'),t=k.slice(0,i),id=k.slice(i+1);
+    if(m[k]){var row=Object.assign({user_id:uid},m[k]);if(t!=='profiles')row.deleted=false;(ups[t]=ups[t]||[]).push({k:k,row:row});}
+    else if(t!=='profiles')jobs.push(function(){return sb.from(t).update({deleted:true}).eq('user_id',uid).eq(PK[t],id).then(chk).then(function(){if(!(k in S.sync.fp))delete S.sync.dirty[k];});});
+    else delete sy.dirty[k];});
+  Object.keys(ups).forEach(function(t){chunk(ups[t],400).forEach(function(c){jobs.push(function(){
+    return sb.from(t).upsert(c.map(function(x){return x.row;}),{onConflict:CONFLICT[t]}).then(chk).then(function(){c.forEach(function(x){if(S.sync.fp[x.k]===snap[x.k])delete S.sync.dirty[x.k];});});});});});
+  return seq(jobs).then(persist);
+}
+function applyRow(t,r){
+  if(t==='profiles'){S.profile=Object.assign({},S.profile||{},{name:r.name||'',sex:r.sex||'',startKg:r.start_kg==null?null:num(r.start_kg),heightCm:r.height_cm==null?null:num(r.height_cm),goalKg:r.goal_kg==null?null:num(r.goal_kg)});
+    if(r.settings&&typeof r.settings==='object')S.settings=Object.assign({},S.settings,r.settings);return;}
+  if(t==='food_entries'||t==='exercise_entries'){var store=t==='food_entries'?S.log:S.exercise;
+    Object.keys(store).forEach(function(d){store[d]=store[d].filter(function(e){return e.id!==r.id;});if(!store[d].length)delete store[d];});
+    if(!r.deleted){var e=t==='food_entries'?{id:r.id,meal:r.meal,name:r.name,amount:r.amount,kcal:num(r.kcal),p:num(r.p),c:num(r.c),f:num(r.f),fib:num(r.fib)}:
+      {id:r.id,type:r.type,min:num(r.minutes),kcal:num(r.kcal),est:!!r.est,notes:r.notes||''};(store[r.date]=store[r.date]||[]).push(e);}return;}
+  if(t==='water_logs'){if(r.deleted)delete S.water[r.date];else S.water[r.date]=num(r.ml);return;}
+  if(t==='weigh_ins'){S.weights=S.weights.filter(function(w){return w.date!==r.date;});if(!r.deleted)S.weights.push({date:r.date,kg:num(r.kg)});return;}
+  if(t==='my_foods'){S.foods=S.foods.filter(function(f){return f.id!==r.id;});if(!r.deleted){var f={id:r.id,name:r.name,amount:r.amount,kcal:num(r.kcal),p:num(r.p),c:num(r.c),f:num(r.f),fib:num(r.fib)};if(num(r.g)>0)f.g=num(r.g);S.foods.push(f);}}
+}
+function pullAll(){
+  var sy=S.sync,lp=sy.lastPull||(sy.lastPull={}),uid=cUser.id;
+  return seq(TABLES.map(function(t){return function(){
+    var q=sb.from(t).select('*').eq('user_id',uid);
+    if(lp[t])q=q.gt('updated_at',new Date(Date.parse(lp[t])-10000).toISOString());
+    return q.order('updated_at',{ascending:true}).limit(10000).then(chk).then(function(r){
+      (r.data||[]).forEach(function(row){var k=t+'|'+(t==='profiles'?'me':row[PK[t]]);if(!S.sync.dirty[k])applyRow(t,row);
+        if(!lp[t]||Date.parse(row.updated_at)>Date.parse(lp[t]))lp[t]=row.updated_at;});});};})).then(function(){trackChanges(false);persist();});
+}
+function syncNow(){
+  if(!sb||!cUser||!S.sync||S.sync.owner!==cUser.id)return Promise.resolve();
+  if(syncing)return Promise.resolve();if(navigator.onLine===false){syncErr='Offline: changes will sync when you\'re back online.';renderAccount();return Promise.resolve();}
+  syncing=true;syncErr='';renderAccount();
+  return pushDirty().then(pullAll).then(function(){S.sync.lastSync=Date.now();persist();},function(e){syncErr='Sync problem: '+(e.message||e);})
+    .then(function(){syncing=false;render();return loadPartner();});
+}
+function loadPartner(){
+  if(!sb||!cUser)return Promise.resolve();var me=cUser.id;
+  return sb.from('partner_links').select('*').order('created_at',{ascending:true}).then(chk).then(function(r){
+    links=r.data||[];partnerErr='';var a=links.filter(function(l){return l.status==='accepted';})[0];
+    if(!a){partner=null;localStorage.removeItem(PKEY);return;}
+    var pid=a.requester===me?a.addressee:a.requester,pem=a.requester===me?a.addressee_email:a.requester_email;
+    return Promise.all([sb.from('profiles').select('*').eq('user_id',pid).maybeSingle(),
+      sb.from('weigh_ins').select('date,kg,updated_at').eq('user_id',pid).eq('deleted',false).order('date',{ascending:true}).limit(5000),
+      sb.from('daily_totals').select('*').eq('user_id',pid).gte('date',addDays(TODAY,-120)).limit(1000)]).then(function(rs){
+      rs.forEach(chk);var pr=rs[0].data||{},daily={},upd=pr.updated_at?Date.parse(pr.updated_at):0;
+      (rs[2].data||[]).forEach(function(x){daily[x.date]={kcal:num(x.kcal),p:num(x.p),exMin:num(x.ex_min),exKcal:num(x.ex_kcal),logged:num(x.food_count)>0};upd=Math.max(upd,Date.parse(x.updated_at)||0);});
+      (rs[1].data||[]).forEach(function(x){upd=Math.max(upd,Date.parse(x.updated_at)||0);});
+      partner={owner:me,id:pid,email:pem,linkId:a.id,profile:{name:pr.name,goalKg:pr.goal_kg==null?null:num(pr.goal_kg),settings:pr.settings||{}},
+        weights:(rs[1].data||[]).map(function(x){return {date:x.date,kg:num(x.kg)};}),daily:daily,updated:upd||null,fetched:Date.now()};
+      try{localStorage.setItem(PKEY,JSON.stringify(partner));}catch(e){}
+    });
+  }).catch(function(e){partnerErr='Couldn\'t load partner: '+(e.message||e);}).then(function(){renderAccount();if(tab==='summary')renderSummary();});
+}
+function renderAccount(){
+  var card=$('acctCard');if(!card)return;
+  if(!cloudOn()){card.hidden=true;return;}
+  card.hidden=false;var h='';
+  if(acctMsg)h+='<p class="hint">'+esc(acctMsg)+'</p>';
+  if(!sb){$('acctBox').innerHTML=h+'<p class="mut">'+(cloudErr?esc(cloudErr):'Connecting…')+'</p><button data-act="retry">Try again</button>';return;}
+  if(!cUser){
+    h+='<p class="mut">Sign in to back up and sync your data across devices, and link with your partner.</p>'+
+      '<label>Email</label><input id="acEmail" type="email" autocomplete="email" inputmode="email">'+
+      '<label>Password (min 6 characters)</label><input id="acPass" type="password" autocomplete="current-password">'+
+      '<div class="grid2" style="margin-top:10px"><button class="pri" data-act="signin">Sign in</button><button data-act="signup">Create account</button></div>'+
+      '<button class="sm" data-act="magic" style="width:100%;margin-top:8px">Email me a sign-in link instead</button>';
+    $('acctBox').innerHTML=h;return;
+  }
+  var sy=S.sync||{},nd=Object.keys(sy.dirty||{}).length;
+  h+='<div class="kv"><span>Signed in as</span><b>'+esc(cUser.email||'')+'</b></div>'+
+    '<div class="kv"><span>Sync</span><span class="'+(syncErr?'r':'mut')+'">'+(syncing?'Syncing…':syncErr?esc(syncErr):(nd?nd+' change'+(nd>1?'s':'')+' waiting':'Up to date')+(sy.lastSync?' · '+new Date(sy.lastSync).toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'}):''))+'</span></div>'+
+    '<div class="grid2" style="margin-top:8px"><button data-act="sync">Sync now</button><button data-act="signout">Sign out</button></div>';
+  h+='<h2 style="margin-top:16px">Partner</h2>';
+  var me=cUser.id,acc=links.filter(function(l){return l.status==='accepted';}),inc=links.filter(function(l){return l.status==='pending'&&l.addressee===me;}),out=links.filter(function(l){return l.status==='pending'&&l.requester===me;});
+  acc.forEach(function(l){h+='<div class="entry"><div class="nm"><b>✓ '+esc(l.requester===me?l.addressee_email:l.requester_email)+'</b><small>Linked. You can see each other\'s progress on the Summary tab.</small></div><button class="sm" data-act="unlink" data-id="'+l.id+'">Remove</button></div>';});
+  inc.forEach(function(l){h+='<div class="entry"><div class="nm"><b>'+esc(l.requester_email)+'</b><small>wants to link with you</small></div><button class="sm pri" data-act="accept" data-id="'+l.id+'">Accept</button><button class="sm" data-act="decline" data-id="'+l.id+'">Decline</button></div>';});
+  out.forEach(function(l){h+='<div class="entry"><div class="nm"><b>'+esc(l.addressee_email)+'</b><small>Request sent, waiting for them to accept</small></div><button class="sm" data-act="unlink" data-id="'+l.id+'">Cancel</button></div>';});
+  if(!acc.length)h+='<label>Partner\'s account email</label><div class="row"><input id="acPartner" type="email" inputmode="email" placeholder="their sign-in email"><button class="pri" data-act="link" style="flex:0">Send</button></div>'+
+    '<p class="mut">They need an account first. Once they accept, you\'ll each see the other\'s weigh-ins, daily totals and goal (not individual foods).</p>';
+  if(partnerErr)h+='<p class="r">'+esc(partnerErr)+'</p>';
+  $('acctBox').innerHTML=h;
+}
+function acctAction(act,id){
+  function busy(p,ok){return p.then(chk).then(function(r){if(ok)acctMsg=ok;renderAccount();return r;},function(e){acctMsg=(e&&e.message)||String(e);renderAccount();});}
+  var em=$('acEmail')?$('acEmail').value.trim():'',pw=$('acPass')?$('acPass').value:'';
+  var redirect=location.origin+location.pathname;
+  if(act==='retry'){cloudErr='';renderAccount();cloudInit();return;}
+  if((act==='signin'||act==='signup'||act==='magic')&&!/.+@.+\..+/.test(em)){acctMsg='Enter your email address';renderAccount();return;}
+  if(act==='signin'){if(!pw){acctMsg='Enter your password';renderAccount();return;}busy(sb.auth.signInWithPassword({email:em,password:pw}),'');}
+  else if(act==='signup'){if(pw.length<6){acctMsg='Choose a password of at least 6 characters';renderAccount();return;}
+    busy(sb.auth.signUp({email:em,password:pw,options:{emailRedirectTo:redirect}})).then(function(r){if(r&&r.data&&!r.data.session){acctMsg='Account created. Check your email to confirm it, then sign in here.';renderAccount();}});}
+  else if(act==='magic')busy(sb.auth.signInWithOtp({email:em,options:{emailRedirectTo:redirect}}),'Check your email for a sign-in link. Open it on this phone.');
+  else if(act==='sync')syncNow();
+  else if(act==='signout'){if(confirm('Sign out? Your data stays on this phone.'))sb.auth.signOut();}
+  else if(act==='link'){var pe=$('acPartner').value.trim();if(!/.+@.+\..+/.test(pe)){acctMsg='Enter your partner\'s email';renderAccount();return;}
+    busy(sb.rpc('request_partner',{p_email:pe}),'Request sent to '+pe+'. They can accept it under More → Account & partner.').then(loadPartner);}
+  else if(act==='accept')busy(sb.rpc('respond_partner',{p_link:id,p_accept:true}),'Linked!').then(loadPartner);
+  else if(act==='decline')busy(sb.rpc('respond_partner',{p_link:id,p_accept:false}),'Declined').then(loadPartner);
+  else if(act==='unlink'){if(!confirm('Remove this partner link? You\'ll both stop seeing each other\'s progress.'))return;busy(sb.from('partner_links').delete().eq('id',id),'Partner link removed').then(loadPartner);}
+}
+function bindExtra(){
+  $('fSetup').addEventListener('submit',function(e){e.preventDefault();saveSetup();});
+  $('suLater').onclick=function(){setupSkipped=true;hideDlg('dlgSetup');render();};
+  $('suSignIn').onclick=function(){setupSkipped=true;hideDlg('dlgSetup');go('more');setTimeout(function(){var c=$('acctCard');if(c&&c.scrollIntoView)c.scrollIntoView();},50);};
+  $('btnEditProfile').onclick=function(){openSetup(!!S.profile);};
+  $('btnSetupBanner').onclick=function(){openSetup(false);};
+  $('acctBox').addEventListener('click',function(e){var b=e.target.closest('[data-act]');if(b)acctAction(b.dataset.act,b.dataset.id);});
+  window.addEventListener('online',function(){syncNow();});
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')syncNow();});
 }
 
 // ---- events
@@ -726,20 +1141,21 @@ function bind(){
   window.addEventListener('resize',function(){if(tab==='weight')drawChart(sortedW());});
   // settings
   $('btnSaveT').onclick=function(){var s=S.settings;Object.keys(TMAP).forEach(function(k){var v=num($(k).value);if(v>0)s[TMAP[k]]=v;});save();toast('Targets saved');render();};
-  $('btnExpJ').onclick=function(){download('kym-tracker-'+TODAY+'.json',JSON.stringify(S,null,2),'application/json');};
-  $('btnExpC').onclick=function(){download('kym-tracker-'+TODAY+'.csv',toCSV(),'text/csv');};
+  $('btnExpJ').onclick=function(){download('tracker-'+TODAY+'.json',JSON.stringify(S,null,2),'application/json');};
+  $('btnExpC').onclick=function(){download('tracker-'+TODAY+'.csv',toCSV(),'text/csv');};
   $('btnImp').onclick=function(){$('impFile').click();};
   $('impFile').onchange=function(){var f=this.files[0];if(!f)return;var rd=new FileReader();
     rd.onload=function(){try{var d=JSON.parse(rd.result);if(!d||typeof d!=='object'||!d.settings)throw 0;
-      if(!confirm('Replace all current data with this backup?'))return;S=d;save();load();save();render();toast('Imported');}catch(e){toast('Not a valid backup file');}};
+      if(!confirm('Replace all current data with this backup?'))return;var sy=S.sync;S=d;load();S.sync=sy;save();render();ensureSetup();toast('Imported');}catch(e){toast('Not a valid backup file');}};
     rd.readAsText(f);this.value='';};
-  $('btnReset').onclick=function(){if(!confirm('Delete ALL data and start fresh? Export first if unsure.'))return;S=defaults();save();cur=TODAY;render();toast('Reset done');};
+  $('btnReset').onclick=resetEverything;
+  bindExtra();
 }
 setInterval(function(){var n=iso(new Date());if(n!==TODAY){var wasToday=cur===TODAY;TODAY=n;if(wasToday)cur=n;render();}},60000);
 
-load();save();bind();render();
-window.KymTracker={state:function(){return S;},quickAdd:quickAdd,totals:totals,toCSV:toCSV,go:go,setDay:function(d){cur=d;render();},
-  search:search,parseQty:parseQty,calcPick:calcPick,openPick:openPick,offSearch:offSearch,offBarcode:offBarcode,offItem:offItem,buildSummary:buildSummary,dbCount:DB.length,doOffSearch:doOffSearch,doBarcode:doBarcode};
+load();persist();bind();render();ensureSetup();cloudInit();
+window.Tracker=window.KymTracker={state:function(){return S;},quickAdd:quickAdd,totals:totals,toCSV:toCSV,go:go,setDay:function(d){cur=d;render();},
+  search:search,parseQty:parseQty,calcPick:calcPick,openPick:openPick,offSearch:offSearch,offBarcode:offBarcode,offItem:offItem,buildSummary:buildSummary,computeStats:computeStats,ownDaily:ownDaily,renderSummary:renderSummary,localRecords:localRecords,syncNow:syncNow,cloud:function(){return {sb:sb,user:cUser,partner:partner,links:links,err:cloudErr};},dbCount:DB.length,doOffSearch:doOffSearch,doBarcode:doBarcode};
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 })();
 </script>
