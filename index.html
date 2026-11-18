@@ -425,14 +425,17 @@ button.sm{min-width:44px}
       <div><label>Total time (min, optional)</label><input id="xDur" type="number" inputmode="decimal" placeholder="auto"></div></div>
   </div>
   <div id="xCardio">
+    <div id="xPosW" hidden><label for="xPos">Position</label><select id="xPos"></select>
+      <p class="mut" id="xPosNote" style="margin:6px 0 0">Estimate only. Based on Compendium of Physical Activities METs (gentle 1.3, moderate 1.8, vigorous 2.8), adjusted for how much of the physical work you're doing in that position.</p></div>
     <div class="grid2"><div><label>Duration (min)</label><input id="xMin" type="number" inputmode="decimal" min="0"></div>
-      <div id="xIntW"><label>Intensity</label><select id="xInt"><option value="light">Light</option><option value="moderate" selected>Moderate</option><option value="vigorous">Vigorous</option></select></div>
+      <div id="xIntW"><label id="xIntLbl">Intensity</label><select id="xInt"><option value="light">Light</option><option value="moderate" selected>Moderate</option><option value="vigorous">Vigorous</option></select></div>
       <div id="xSpeedW"><label>Speed (km/h, optional)</label><input id="xSpeed" type="number" step="0.1" inputmode="decimal"></div>
       <div id="xInclW"><label>Incline (%)</label><input id="xIncl" type="number" step="0.5" inputmode="decimal"></div></div>
   </div>
   <div class="preview" id="xPrev"></div>
   <details id="xHowW"><summary class="mut">How this was calculated</summary><p class="mut" id="xHow" style="margin:6px 0 0"></p></details>
-  <div class="grid2"><div><label>kcal (blank = estimate)</label><input id="xKcal" type="number" inputmode="numeric" min="0"></div><div><label>Notes</label><input id="xNotes" placeholder="optional"></div></div>
+  <div class="grid2"><div><label for="xAt">Time of day</label><input id="xAt" type="time"></div><div><label>kcal (blank = estimate)</label><input id="xKcal" type="number" inputmode="numeric" min="0"></div></div>
+  <label>Notes</label><input id="xNotes" placeholder="optional">
   <div class="row" style="margin-top:12px"><button class="danger" type="button" id="xDel" hidden>Delete</button><button class="pri" type="button" id="xSave">Add to log</button></div>
 </div></dialog>
 
@@ -1063,7 +1066,7 @@ function hash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(
 function localRecords(){
   var m={};
   Object.keys(S.log).forEach(function(d){dayFood(d).forEach(function(e){m['food_entries|'+e.id]={id:e.id,date:d,meal:e.meal||'',name:e.name||'',amount:e.amount||'',kcal:num(e.kcal),p:num(e.p),c:num(e.c),f:num(e.f),fib:num(e.fib)};});});
-  Object.keys(S.exercise).forEach(function(d){dayEx(d).forEach(function(e){var det={};['rest','dur','speed','incline','intensity'].forEach(function(k){if(e[k]!=null&&e[k]!=='')det[k]=e[k];});
+  Object.keys(S.exercise).forEach(function(d){dayEx(d).forEach(function(e){var det={};['rest','dur','speed','incline','intensity','pos','at'].forEach(function(k){if(e[k]!=null&&e[k]!=='')det[k]=e[k];});
     m['exercise_entries|'+e.id]={id:e.id,date:d,type:e.type||'',minutes:num(e.min),kcal:num(e.kcal),est:!!e.est,notes:e.notes||'',kind:e.kind||null,ex_key:e.exKey||null,sets:e.sets&&e.sets.length?e.sets.map(function(s){return {reps:num(s.reps),kg:num(s.kg)};}):null,details:Object.keys(det).length?det:null};});});
   Object.keys(S.water).forEach(function(d){m['water_logs|'+d]={date:d,ml:num(S.water[d])};});
   S.weights.forEach(function(w){m['weigh_ins|'+w.date]={date:w.date,kg:num(w.kg)};});
@@ -1247,7 +1250,19 @@ var TEMPO_S=3.5,REST_DEFAULT=75,STR_MET_CAP=8;
 var EX_CLASSES={cf:{met:6.0,label:'Compound free weight'},cm:{met:5.0,label:'Compound machine'},bw:{met:4.0,label:'Bodyweight'},
   if:{met:4.0,label:'Isolation free weight'},im:{met:3.5,label:'Isolation machine / cable'},core:{met:3.0,label:'Core'},exp:{met:8.0,label:'Explosive / circuit'},
   as:{met:5.0,label:'Assisted machine'},cl:{mets:[3.5,5,7],label:'Cardio (light)'},cmod:{mets:[4.5,6,8],label:'Cardio'},cv:{mets:[6,8,10],label:'Cardio (hard)'}};
-var EX_GROUPS=['Legs','Chest','Back','Shoulders','Arms','Core','Full body','Cardio','Classes & sport'];
+var EX_GROUPS=['Legs','Chest','Back','Shoulders','Arms','Core','Full body','Cardio','Classes & sport','Lifestyle'];
+/* SEX / INTIMACY (Lifestyle). Base METs from the 2024 Compendium of Physical Activities, 14xxx "sexual activity":
+     gentle (passive, light effort) 1.3 · moderate (general) 1.8 · vigorous (active) 2.8.
+   Lab data (Frappier et al. 2013, PLoS ONE, armband-measured, young couples) averaged ~4.2 kcal/min men and
+   ~3.1 kcal/min women, so the Compendium values are conservative; position multipliers below are modest and
+   reflect who is doing more of the moving / supporting body weight. MET = base x multiplier, clamped 1.3-5.0. */
+var SEX_POS=[['mixed','Mixed / changing positions',1.0],['top','On top / active partner',1.25],['bottom','Underneath / less active partner',0.8],
+  ['kneel','Kneeling (from behind), active',1.3],['kneelp','Kneeling (from behind), less active',0.85],['standing','Standing',1.45],
+  ['seated','Seated / lap',1.05],['side','Side by side / spooning',0.85]];
+var SEX_MET_MIN=1.3,SEX_MET_MAX=5.0;
+function sexPos(k){for(var i=0;i<SEX_POS.length;i++)if(SEX_POS[i][0]===k)return SEX_POS[i];return SEX_POS[0];}
+function nowHM(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function fmtAt(hm){if(!/^\d{1,2}:\d{2}$/.test(hm||''))return '';var p=hm.split(':'),h=+p[0];return (h%12||12)+':'+p[1]+(h<12?' am':' pm');}
 // [name, group, equipment, class, extra]  extra: bodyweight share (bw/core/exp), 't' = timed sets (seconds), or cardio [light,moderate,vigorous] METs + flags
 var EXLIB=[
  ['Leg press','Legs','Machine','cm'],['Hack squat','Legs','Machine','cm'],['Smith machine squat','Legs','Machine','cm'],['Pendulum squat','Legs','Machine','cm'],['Belt squat','Legs','Machine','cm'],
@@ -1288,11 +1303,12 @@ var EXLIB=[
  ['Yoga','Classes & sport','Class','cardio',[2.5,3.0,4.0]],['Pilates','Classes & sport','Class','cardio',[2.8,3.0,3.8]],['Stretching / mobility','Classes & sport','Class','cardio',[2.3,2.3,2.8]],
  ['Tennis','Classes & sport','Sport','cardio',[5.0,7.3,8.0]],['Basketball','Classes & sport','Sport','cardio',[4.5,6.5,8.0]],['Soccer / football','Classes & sport','Sport','cardio',[5.0,7.0,10.0]],
  ['Badminton','Classes & sport','Sport','cardio',[4.5,5.5,7.0]],['Golf (walking)','Classes & sport','Sport','cardio',[4.3,4.8,5.3]],['Martial arts','Classes & sport','Sport','cardio',[5.3,7.8,10.3]],
- ['Gardening / yard work','Classes & sport','Other','cardio',[3.0,3.8,5.0]],['Housework / cleaning','Classes & sport','Other','cardio',[2.5,3.3,4.0]]
+ ['Gardening / yard work','Classes & sport','Other','cardio',[3.0,3.8,5.0]],['Housework / cleaning','Classes & sport','Other','cardio',[2.5,3.3,4.0]],
+ ['Sex','Lifestyle','Partner activity','cardio',[1.3,1.8,2.8],'p']
 ];
 function slug(s){return norm(s).replace(/ /g,'-');}
 function libEx(r){var c=r[3],o={key:'lib:'+slug(r[0]),name:r[0],grp:r[1],eq:r[2],cls:c,src:'lib'};
-  if(c==='cardio'){o.kind='cardio';o.mets=r[4];o.speed=/s/.test(r[5]||'');o.incline=/i/.test(r[5]||'');}
+  if(c==='cardio'){o.kind='cardio';o.mets=r[4];o.speed=/s/.test(r[5]||'');o.incline=/i/.test(r[5]||'');o.pos=/p/.test(r[5]||'');}
   else{o.kind='strength';o.frac=typeof r[4]==='number'?r[4]:null;o.timed=r[5]==='t';}
   return o;}
 var EXL=EXLIB.map(libEx);
@@ -1340,6 +1356,9 @@ function cardioCalc(ex,o,P){
   if(ex.speed&&sp>0){var Sm=sp*1000/60,G=(ex.incline?num(o.incline):0)/100,run=ex.key==='lib:running'||(ex.key!=='lib:walking'&&sp>=7.5);
     var vo2=run?0.2*Sm+0.9*Sm*G+3.5:0.1*Sm+1.8*Sm*G+3.5;met=vo2/3.5;
     src='ACSM '+(run?'running':'walking')+' equation at '+r1(sp)+' km/h'+(ex.incline?', '+r1(num(o.incline))+'% incline':'')+': VO2 '+r1(vo2)+' ml/kg/min = '+met.toFixed(2)+' MET.';}
+  else if(ex.pos){var j={light:0,moderate:1,vigorous:2}[o.intensity||'moderate'],base=(ex.mets||[1.3,1.8,2.8])[j],sp=sexPos(o.pos),eff=['gentle','moderate','vigorous'][j];
+    met=clamp(base*sp[2],SEX_MET_MIN,SEX_MET_MAX);
+    src='Estimate. Compendium MET for '+eff+' effort: '+base.toFixed(1)+' × position "'+sp[1]+'" '+sp[2].toFixed(2)+' = '+met.toFixed(2)+' MET (kept within '+SEX_MET_MIN+'–'+SEX_MET_MAX+').';}
   else{var i={light:0,moderate:1,vigorous:2}[o.intensity||'moderate'];met=(ex.mets||[3.5,5,7])[i];src='Compendium MET for '+(o.intensity||'moderate')+' '+ex.name.toLowerCase()+': '+met.toFixed(1)+'.';}
   var kcal=Math.max(0,(met-1)*P.kcalMin*min);
   return {kcal:r0(kcal),min:r1(min),met:met,how:src+' ≈ '+(met*3.5/P.vo2rest).toFixed(1)+'× your resting rate (corrected MET). '+personLine(P)+' Active kcal = (MET − 1) × '+P.kcalMin.toFixed(2)+' × '+r1(min)+' min ≈ '+r0(kcal)+' kcal.'};
@@ -1360,13 +1379,14 @@ function lastTime(key,before,skipId){ // most recent earlier session with this e
 
 // ---- exercise dialog state
 var xEx=null,xEdit=null,xRows=[],xRowsEdited=false;
+function effLbl(ex,v){return ex&&ex.pos?({light:'gentle',moderate:'moderate',vigorous:'vigorous'}[v]||v):v;}
 function exDesc(ex){return ex.kind==='cardio'?ex.grp+' · '+ex.eq:ex.grp+' · '+ex.eq+' · '+(EX_CLASSES[ex.cls]||{label:''}).label;}
 function openEx(ex,entry){
   xEx=ex;xEdit=entry||null;xRowsEdited=false;
   $('xName').textContent=ex.name;$('xSub').textContent=exDesc(ex);
   var str=ex.kind!=='cardio';$('xStrength').hidden=!str;$('xCardio').hidden=str;
   var lt=lastTime(ex.key,cur,entry&&entry.id);
-  $('xLast').hidden=!lt;if(lt)$('xLast').textContent='Last time ('+short(lt.date)+'): '+(lt.e.sets&&lt.e.sets.length?setsSummary(lt.e.sets,ex)+(entryVol(lt.e)?' · '+fmtKg(entryVol(lt.e))+' kg volume':''):r0(lt.e.min)+' min'+(lt.e.speed?' @ '+lt.e.speed+' km/h'+(lt.e.incline?', '+lt.e.incline+'%':''):'')+(lt.e.intensity&&!lt.e.speed?', '+lt.e.intensity:''))+' · '+r0(lt.e.kcal)+' kcal';
+  $('xLast').hidden=!lt;if(lt)$('xLast').textContent='Last time ('+short(lt.date)+'): '+(lt.e.sets&&lt.e.sets.length?setsSummary(lt.e.sets,ex)+(entryVol(lt.e)?' · '+fmtKg(entryVol(lt.e))+' kg volume':''):r0(lt.e.min)+' min'+(lt.e.speed?' @ '+lt.e.speed+' km/h'+(lt.e.incline?', '+lt.e.incline+'%':''):'')+(lt.e.intensity&&!lt.e.speed?', '+effLbl(ex,lt.e.intensity):'')+(lt.e.pos?', '+sexPos(lt.e.pos)[1].toLowerCase():''))+' · '+r0(lt.e.kcal)+' kcal';
   if(str){
     var tm=ex.timed,assist=ex.cls==='as',bwish=ex.frac!=null&&!assist;
     $('xRepsLbl').textContent=$('xRepsH').textContent=tm?'Seconds':'Reps';
@@ -1381,8 +1401,13 @@ function openEx(ex,entry){
   }else{
     $('xMin').value=entry?entry.min:(lt?lt.e.min:30);$('xInt').value=entry&&entry.intensity||(lt&&lt.e.intensity)||'moderate';
     $('xSpeedW').hidden=!ex.speed;$('xInclW').hidden=!ex.incline;
+    $('xPosW').hidden=!ex.pos;$('xIntLbl').textContent=ex.pos?'Effort':'Intensity';
+    [].forEach.call($('xInt').options,function(op){op.textContent=effLbl(ex,op.value).replace(/^./,function(c){return c.toUpperCase();});});
+    if(ex.pos)$('xPos').value=entry&&entry.pos||(lt&&lt.e.pos)||'mixed';
+    if(ex.pos&&!entry&&!lt)$('xMin').value=20;
     $('xSpeed').value=entry&&entry.speed?entry.speed:(lt&&lt.e.speed?lt.e.speed:'');$('xIncl').value=entry&&entry.incline!=null&&entry.incline!==''?entry.incline:(lt&&lt.e.incline?lt.e.incline:'');
   }
+  $('xAt').value=entry?(entry.at||''):(cur===TODAY?nowHM():'');
   $('xKcal').value=entry&&!entry.est?entry.kcal:'';$('xNotes').value=entry?entry.notes||'':'';
   $('xDel').hidden=!entry;$('xSave').textContent=entry?'Save':'Add to log';$('xHowW').open=false;
   updEx();showDlg('dlgEx');
@@ -1395,7 +1420,7 @@ function applyAll(){var n=Math.max(1,Math.min(20,r0(num($('xSets').value)||1))),
 function exCalc(){
   if(!xEx)return null;
   if(xEx.kind!=='cardio')return strengthCalc(xEx,xRows,{rest:$('xRest').value,dur:$('xDur').value});
-  return cardioCalc(xEx,{min:$('xMin').value,intensity:$('xInt').value,speed:$('xSpeed').value,incline:$('xIncl').value});
+  return cardioCalc(xEx,{min:$('xMin').value,intensity:$('xInt').value,pos:$('xPos').value,speed:$('xSpeed').value,incline:$('xIncl').value});
 }
 function updEx(){var c=exCalc();if(!c)return;var ov=$('xKcal').value.trim();
   $('xPrev').innerHTML='<b>≈ '+r0(c.kcal)+' kcal</b> active'+(ov!==''?' · <b>using your '+r0(num(ov))+' kcal</b>':'')+' · '+r1(c.min)+' min'+(xEx.kind!=='cardio'&&c.vol?' · '+fmtKg(c.vol)+' kg volume':'')+(xEx.kind!=='cardio'&&c.reps?' · '+c.reps+' reps':'');
@@ -1407,7 +1432,8 @@ function saveExEntry(){
   var ov=$('xKcal').value.trim(),e={id:xEdit?xEdit.id:uid(),type:ex.name,exKey:ex.key,kind:ex.kind==='cardio'?'cardio':'strength',min:c.min,kcal:ov!==''?r0(num(ov)):c.kcal,est:ov==='',notes:$('xNotes').value.trim()};
   if(e.kind==='strength'){e.sets=xRows.filter(function(s){return num(s.reps)>0;}).map(function(s){return {reps:num(s.reps),kg:num(s.kg)};});
     if(num($('xRest').value)>0)e.rest=num($('xRest').value);if(num($('xDur').value)>0)e.dur=num($('xDur').value);}
-  else{e.intensity=$('xInt').value;if(ex.speed&&num($('xSpeed').value)>0)e.speed=num($('xSpeed').value);if(ex.incline&&$('xIncl').value!=='')e.incline=num($('xIncl').value);}
+  else{e.intensity=$('xInt').value;if(ex.speed&&num($('xSpeed').value)>0)e.speed=num($('xSpeed').value);if(ex.incline&&$('xIncl').value!=='')e.incline=num($('xIncl').value);if(ex.pos)e.pos=$('xPos').value;}
+  if(/^\d{1,2}:\d{2}$/.test($('xAt').value))e.at=$('xAt').value;
   var l=S.exercise[cur]=S.exercise[cur]||[];
   if(xEdit){var i=l.findIndex(function(x){return x.id===xEdit.id;});if(i>=0)l[i]=e;else l.push(e);}else l.push(e);
   save();hideDlg('dlgEx');toast(xEdit?'Saved':'Added '+ex.name);render();return true;
@@ -1424,7 +1450,8 @@ function renderEx(){
     '<div class="stat"><b>'+r0(tk)+'</b><span class="mut">active kcal</span></div><div class="stat"><b>'+fmtKg(tv)+'</b><span class="mut">kg volume</span></div></div>';
   $('exList').innerHTML=l.length?l.map(function(e){var ex=exFor(e),sub;
     if(e.sets&&e.sets.length){var v=entryVol(e);sub=setsSummary(e.sets,ex)+(v?' · vol '+fmtKg(v)+' kg':'')+' · ~'+r0(e.min)+' min';}
-    else sub=r0(e.min)+' min'+(e.speed?' · '+e.speed+' km/h'+(e.incline?', '+e.incline+'% incline':''):'')+(e.intensity&&!e.speed?' · '+e.intensity:'');
+    else sub=r0(e.min)+' min'+(e.speed?' · '+e.speed+' km/h'+(e.incline?', '+e.incline+'% incline':''):'')+(e.intensity&&!e.speed?' · '+effLbl(exFor(e),e.intensity):'')+(e.pos?' · '+esc(sexPos(e.pos)[1].toLowerCase()):'');
+    if(e.at)sub=fmtAt(e.at)+' · '+sub;
     sub+=(e.est?' · est.':' · manual kcal')+(e.notes?' · '+esc(e.notes):'');
     return '<div class="entry"><div class="nm"><b>'+esc(e.type)+'</b><small>'+sub+'</small></div><b>'+r0(e.kcal)+' kcal</b>'+
       (e.kind?'<button class="sm" data-exedit="'+e.id+'">Edit</button>':'<button class="sm" data-exdel="'+e.id+'">✕</button>')+'</div>';}).join(''):emptyState('exercise','bg-x','No exercise logged yet','Search the library above: gym machines, free weights, cardio and classes.');
@@ -1458,7 +1485,7 @@ function bindEx(){
   $('xSetRows').addEventListener('input',function(e){var t=e.target;if(t.dataset.ri==null)return;xRows[+t.dataset.ri][t.dataset.rf]=num(t.value);xRowsEdited=true;updEx();});
   $('xSetRows').addEventListener('click',function(e){var b=e.target.closest('[data-rdel]');if(!b)return;xRows.splice(+b.dataset.rdel,1);if(!xRows.length)xRows.push({reps:10,kg:0});xRowsEdited=true;drawRows();updEx();});
   $('xAddSet').onclick=function(){var l=xRows[xRows.length-1]||{reps:10,kg:0};xRows.push({reps:l.reps,kg:l.kg});xRowsEdited=true;drawRows();updEx();};
-  ['xRest','xDur','xMin','xSpeed','xIncl','xKcal'].forEach(function(id){$(id).addEventListener('input',updEx);});$('xInt').onchange=updEx;
+  ['xRest','xDur','xMin','xSpeed','xIncl','xKcal'].forEach(function(id){$(id).addEventListener('input',updEx);});$('xInt').onchange=updEx;$('xPos').onchange=updEx;$('xPos').innerHTML=SEX_POS.map(function(p){return '<option value="'+p[0]+'">'+p[1]+'</option>';}).join('');
   $('fCx').addEventListener('submit',function(e){e.preventDefault();var n=$('cxName').value.trim();if(!n){toast('Enter a name');return;}
     var m={name:n,grp:$('cxGrp').value,cls:$('cxCls').value};if(cxEdit)Object.assign(cxEdit,m);else{m.id=uid();S.myEx.push(m);}
     save();hideDlg('dlgCx');$('exQ').value=n;$('exCat').value='';render();toast('Saved '+n);});
